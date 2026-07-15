@@ -61,7 +61,7 @@
 			<key>CFBundleURLSchemes</key>
 			<array>
 				<!-- Google Sign-In reversed client ID from GoogleService-Info.plist -->
-				<string>com.googleusercontent.apps.934105443254-lnpkt926q2gloa0hdqne676vcc3bkpqf</string>
+				<string>com.googleusercontent.apps.934105443254-ajq2q6m9mq26e8krfr10a9b6q2ul7opf</string>
 			</array>
 		</dict>
 	</array>
