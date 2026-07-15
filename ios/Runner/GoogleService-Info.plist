@@ -3,11 +3,11 @@
 <plist version="1.0">
 <dict>
 	<key>CLIENT_ID</key>
-	<string>934105443254-lnpkt926q2gloa0hdqne676vcc3bkpqf.apps.googleusercontent.com</string>
+	<string>934105443254-ajq2q6m9mq26e8krfr10a9b6q2ul7opf.apps.googleusercontent.com</string>
 	<key>REVERSED_CLIENT_ID</key>
-	<string>com.googleusercontent.apps.934105443254-lnpkt926q2gloa0hdqne676vcc3bkpqf</string>
+	<string>com.googleusercontent.apps.934105443254-ajq2q6m9mq26e8krfr10a9b6q2ul7opf</string>
 	<key>ANDROID_CLIENT_ID</key>
-	<string>934105443254-8r7ua5cdm4acice7gh0cj4f1lbjp9gdc.apps.googleusercontent.com</string>
+	<string>934105443254-21vofv8c3tpelllao280qrq5e2hg3obr.apps.googleusercontent.com</string>
 	<key>API_KEY</key>
 	<string>AIzaSyA5LNGxFd3xb22QWMbVoGvQN21Pw-EsDfs</string>
 	<key>GCM_SENDER_ID</key>
@@ -15,7 +15,7 @@
 	<key>PLIST_VERSION</key>
 	<string>1</string>
 	<key>BUNDLE_ID</key>
-	<string>com.manbar.manbarAlmasjid</string>
+	<string>com.slatk.slatkapp</string>
 	<key>PROJECT_ID</key>
 	<string>dinapp-3eadd</string>
 	<key>STORAGE_BUCKET</key>
@@ -31,6 +31,6 @@
 	<key>IS_SIGNIN_ENABLED</key>
 	<true></true>
 	<key>GOOGLE_APP_ID</key>
-	<string>1:934105443254:ios:2458c6872d117a416eef17</string>
+	<string>1:934105443254:ios:b879ed4172cbee7d6eef17</string>
 </dict>
 </plist>

@@ -3,8 +3,8 @@ import 'package:manbar_almasjid/main.dart';
 
 void main() {
   testWidgets('App widget instantiation test', (WidgetTester tester) async {
-    // Verify that ManbarAlmasjidApp is instantiated.
-    const app = ManbarAlmasjidApp();
+    // Verify that SalatiQourbakApp is instantiated.
+    const app = SalatiQourbakApp();
     expect(app, isNotNull);
   });
 }

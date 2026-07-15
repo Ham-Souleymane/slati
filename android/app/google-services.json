@@ -14,11 +14,11 @@
       },
       "oauth_client": [
         {
-          "client_id": "934105443254-21vofv8c3tpelllao280qrq5e2hg3obr.apps.googleusercontent.com",
+          "client_id": "934105443254-pt2bdog0eg85k2eiqf5h93caovkttc72.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {
             "package_name": "com.manbar.manbarAlmasjid",
-            "certificate_hash": "7e8f430dfe43d3081a7209f3f676f322993681ca"
+            "certificate_hash": "2fea42a1ee5d36a9c700cd2964c25faafbba5666"
           }
         },
         {
@@ -39,10 +39,54 @@
               "client_type": 3
             },
             {
-              "client_id": "934105443254-lnpkt926q2gloa0hdqne676vcc3bkpqf.apps.googleusercontent.com",
+              "client_id": "934105443254-ajq2q6m9mq26e8krfr10a9b6q2ul7opf.apps.googleusercontent.com",
               "client_type": 2,
               "ios_info": {
-                "bundle_id": "com.manbar.manbarAlmasjid"
+                "bundle_id": "com.slatk.slatkapp"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:934105443254:android:71913ebe5bdbfd006eef17",
+        "android_client_info": {
+          "package_name": "com.slatk.slatkapp"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "934105443254-lsjc61k228mh3k1fr17e3ad7o5ifq8ak.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.slatk.slatkapp",
+            "certificate_hash": "ff7d2b615f37bdf9e9346f03c23f6a11ac36e058"
+          }
+        },
+        {
+          "client_id": "934105443254-o2sdu3n2avnn6ciqjpoadmiq2rmdidfd.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCop8-t-igl8MT3w3OQjIV2LmqDhZvYlMQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "934105443254-o2sdu3n2avnn6ciqjpoadmiq2rmdidfd.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "934105443254-ajq2q6m9mq26e8krfr10a9b6q2ul7opf.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.slatk.slatkapp"
               }
             }
           ]

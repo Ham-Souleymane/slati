@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import '../../../core/localization/app_localizations.dart';
+import '../../../core/router/app_router.dart';
 import '../../../core/theme/app_colors.dart';
 
 /// Splash screen that checks authentication state and auto-routes.
@@ -47,7 +50,8 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
   Future<void> _checkAuthAndNavigate() async {
     await Future.delayed(const Duration(milliseconds: 2000));
     if (!mounted) return;
-    // Router redirect logic handles navigation based on auth + imam profile.
+    // Router redirect logic handles navigation based on auth + user location.
+    context.go(AppRoutes.home);
   }
 
   @override
@@ -69,30 +73,16 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              // Logo Symbol
-              Container(
-                width: 120,
-                height: 120,
-                decoration: BoxDecoration(
-                  color: AppColors.white.withValues(alpha: 0.05),
-                  shape: BoxShape.circle,
-                  border: Border.all(
-                    color: AppColors.gold.withValues(alpha: 0.4),
-                    width: 2,
-                  ),
-                ),
-                child: const Center(
-                  child: Icon(
-                    Icons.mosque_rounded,
-                    color: AppColors.gold,
-                    size: 60,
-                  ),
-                ),
+              // Logo Image
+              Image.asset(
+                'assets/images/app_icon.png',
+                width: 130,
+                height: 130,
               ),
               const SizedBox(height: 24),
               // App Title
               Text(
-                'منبر المسجد',
+                AppLocalizations.of(context)?.translate('app_title') ?? 'صلاتي قربك',
                 style: GoogleFonts.tajawal(
                   fontSize: 32,
                   fontWeight: FontWeight.w800,
@@ -103,7 +93,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
               const SizedBox(height: 8),
               // Subtitle
               Text(
-                'تطبيق الإمام والمؤذن للمسجد',
+                AppLocalizations.of(context)?.translate('splash_subtitle') ?? 'اعرف أقرب المساجد وأوقات الصلاة',
                 style: GoogleFonts.tajawal(
                   fontSize: 15,
                   fontWeight: FontWeight.w400,

@@ -28,6 +28,22 @@ abstract class IAuthRepository {
 
   Future<UserCredential?> signInWithApple();
 
+  /// Signs in anonymously — every guest gets a stable Firebase UID.
+  Future<UserCredential> signInAnonymously();
+
+  /// Attempts to link an anonymous account to email/password credentials.
+  /// Falls back to `createUserWithEmailAndPassword` if already linked.
+  Future<UserCredential> linkAnonymousWithEmailCredential({
+    required String email,
+    required String password,
+  });
+
+  /// Attempts to link an anonymous account to a Google credential.
+  Future<UserCredential?> linkAnonymousWithGoogleCredential();
+
+  /// Attempts to link an anonymous account to an Apple credential.
+  Future<UserCredential?> linkAnonymousWithAppleCredential();
+
   Future<void> signOut();
 
   Future<void> sendPasswordResetEmail(String email);
@@ -101,14 +117,18 @@ class AuthRepository implements IAuthRepository {
 
       return _auth.signInWithCredential(credential);
     } on GoogleSignInException catch (e) {
-      debugPrint('GoogleSignInException caught: code=${e.code}, description=${e.description}');
-      // User tapped "Cancel" — treat as a silent no-op.
+      debugPrint('[GoogleSignIn] Exception: code=${e.code}, description=${e.description}');
+      // NOTE: A SHA-1 fingerprint mismatch or missing OAuth client also
+      // surfaces as GoogleSignInExceptionCode.canceled on Android.
+      // If login silently fails here, verify your SHA-1 is registered in
+      // Firebase Console for the correct package name.
       if (e.code == GoogleSignInExceptionCode.canceled) {
+        debugPrint('[GoogleSignIn] Sign-in dismissed. If unintentional, check SHA-1 fingerprint in Firebase Console.');
         return null;
       }
       rethrow;
     } catch (e, stack) {
-      debugPrint('Unexpected error in signInWithGoogle: $e\n$stack');
+      debugPrint('[GoogleSignIn] Unexpected error: $e\n$stack');
       rethrow;
     }
   }
@@ -157,6 +177,117 @@ class AuthRepository implements IAuthRepository {
     final bytes = utf8.encode(input);
     final digest = sha256.convert(bytes);
     return digest.toString();
+  }
+
+  // ── Anonymous Sign-In ────────────────────────────────────────
+  @override
+  Future<UserCredential> signInAnonymously() async {
+    return _auth.signInAnonymously();
+  }
+
+  // ── Credential Linking (anonymous → real account) ────────────
+  @override
+  Future<UserCredential> linkAnonymousWithEmailCredential({
+    required String email,
+    required String password,
+  }) async {
+    final current = _auth.currentUser;
+    if (current != null && current.isAnonymous) {
+      try {
+        final credential = EmailAuthProvider.credential(
+          email: email.trim(),
+          password: password,
+        );
+        return await current.linkWithCredential(credential);
+      } on FirebaseAuthException catch (e) {
+        // If already linked or credential in use — fall back to normal sign-up
+        if (e.code == 'provider-already-linked' ||
+            e.code == 'credential-already-in-use' ||
+            e.code == 'email-already-in-use') {
+          return _auth.createUserWithEmailAndPassword(
+            email: email.trim(),
+            password: password,
+          );
+        }
+        rethrow;
+      }
+    }
+    // Not anonymous — just create normally
+    return _auth.createUserWithEmailAndPassword(
+      email: email.trim(),
+      password: password,
+    );
+  }
+
+  @override
+  Future<UserCredential?> linkAnonymousWithGoogleCredential() async {
+    await _ensureGoogleInitialized();
+    try {
+      final googleUser = await _googleSignIn.authenticate();
+      final googleAuth = googleUser.authentication;
+      final credential = GoogleAuthProvider.credential(
+        idToken: googleAuth.idToken,
+      );
+      final current = _auth.currentUser;
+      if (current != null && current.isAnonymous) {
+        try {
+          return await current.linkWithCredential(credential);
+        } on FirebaseAuthException catch (e) {
+          if (e.code == 'credential-already-in-use' ||
+              e.code == 'provider-already-linked') {
+            return _auth.signInWithCredential(credential);
+          }
+          rethrow;
+        }
+      }
+      return _auth.signInWithCredential(credential);
+    } on GoogleSignInException catch (e) {
+      if (e.code == GoogleSignInExceptionCode.canceled) return null;
+      rethrow;
+    }
+  }
+
+  @override
+  Future<UserCredential?> linkAnonymousWithAppleCredential() async {
+    final rawNonce = _generateNonce();
+    final shaNonce = _sha256ofString(rawNonce);
+
+    WebAuthenticationOptions? webOptions;
+    if (kIsWeb || defaultTargetPlatform == TargetPlatform.android) {
+      webOptions = WebAuthenticationOptions(
+        clientId: 'com.manbar.manbarAlmasjid.service',
+        redirectUri: Uri.parse(
+            'https://dinapp-3eadd.firebaseapp.com/__/auth/handler'),
+      );
+    }
+
+    final appleCredential = await SignInWithApple.getAppleIDCredential(
+      scopes: [
+        AppleIDAuthorizationScopes.email,
+        AppleIDAuthorizationScopes.fullName,
+      ],
+      nonce: shaNonce,
+      webAuthenticationOptions: webOptions,
+    );
+
+    final credential = OAuthProvider('apple.com').credential(
+      idToken: appleCredential.identityToken,
+      rawNonce: rawNonce,
+    );
+
+    final current = _auth.currentUser;
+    if (current != null && current.isAnonymous) {
+      try {
+        return await current.linkWithCredential(credential);
+      } on FirebaseAuthException catch (e) {
+        if (e.code == 'credential-already-in-use' ||
+            e.code == 'provider-already-linked') {
+          return _auth.signInWithCredential(credential);
+        }
+        rethrow;
+      }
+    }
+    return _auth.signInWithCredential(credential);
   }
 
   // ── Sign Out ──────────────────────────────────────────────────

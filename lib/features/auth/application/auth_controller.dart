@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/providers/firebase_providers.dart';
 import '../data/auth_repository.dart';
+import '../data/user_repository.dart';
 import 'auth_state.dart';
 
 /// Riverpod [Notifier] that manages auth operations and exposes [AuthState].
@@ -177,6 +178,131 @@ class AuthController extends Notifier<AuthState> {
     }
   }
 
+  // ── Guest Sign-In ─────────────────────────────────────────
+  Future<void> signInAnonymously() async {
+    debugPrint('[AuthController] signInAnonymously started');
+    state = state.copyWith(status: AuthStatus.loading, errorMessage: null);
+    try {
+      debugPrint('[AuthController] Calling _repo.signInAnonymously...');
+      final credential = await _repo.signInAnonymously();
+      debugPrint('[AuthController] Repo returned credential for UID: ${credential.user?.uid}');
+      final uid = credential.user?.uid;
+      if (uid != null) {
+        // Create a lightweight guest user doc (optional/resilient)
+        try {
+          debugPrint('[AuthController] Creating guest user doc in Firestore...');
+          await ref.read(userRepositoryProvider).createUserDoc(
+                uid: uid,
+                fullName: 'زائر',
+                isGuest: true,
+              );
+          debugPrint('[AuthController] Firestore user doc created');
+        } catch (e) {
+          debugPrint('[AuthController] Warning: Could not create guest user doc in Firestore: $e');
+          // Proceed anyway as Firebase Auth was successful
+        }
+      }
+      state = AuthState(
+        status: AuthStatus.authenticated,
+        user: credential.user,
+      );
+      debugPrint('[AuthController] State updated to authenticated');
+    } on FirebaseAuthException catch (e) {
+      debugPrint('[AuthController] FirebaseAuthException: code=${e.code}, message=${e.message}');
+      state = AuthState(
+        status: AuthStatus.error,
+        errorMessage: _mapFirebaseError(e),
+      );
+    } catch (e) {
+      debugPrint('[AuthController] Generic exception: $e');
+      state = AuthState(
+        status: AuthStatus.error,
+        errorMessage: 'فشل الدخول كزائر: $e',
+      );
+    }
+  }
+
+  // ── Upgrade anonymous → email/password ─────────────────────
+  Future<void> linkAndUpgradeAnonymous({
+    required String email,
+    required String password,
+  }) async {
+    state = state.copyWith(status: AuthStatus.loading, errorMessage: null);
+    try {
+      final credential = await _repo.linkAnonymousWithEmailCredential(
+        email: email,
+        password: password,
+      );
+      state = AuthState(
+        status: AuthStatus.authenticated,
+        user: credential.user,
+      );
+    } on FirebaseAuthException catch (e) {
+      state = AuthState(
+        status: AuthStatus.error,
+        errorMessage: _mapFirebaseError(e),
+      );
+    } catch (e) {
+      state = AuthState(
+        status: AuthStatus.error,
+        errorMessage: 'حدث خطأ غير متوقع.',
+      );
+    }
+  }
+
+  // ── Upgrade anonymous → Google ────────────────────────────
+  Future<void> linkAndUpgradeAnonymousWithGoogle() async {
+    state = state.copyWith(status: AuthStatus.loading, errorMessage: null);
+    try {
+      final credential = await _repo.linkAnonymousWithGoogleCredential();
+      if (credential == null) {
+        state = const AuthState(status: AuthStatus.unauthenticated);
+        return;
+      }
+      state = AuthState(
+        status: AuthStatus.authenticated,
+        user: credential.user,
+      );
+    } on FirebaseAuthException catch (e) {
+      state = AuthState(
+        status: AuthStatus.error,
+        errorMessage: _mapFirebaseError(e),
+      );
+    } catch (e, stack) {
+      debugPrint('linkAndUpgradeAnonymousWithGoogle error: $e\n$stack');
+      state = AuthState(
+        status: AuthStatus.error,
+        errorMessage: 'فشل الربط عبر Google.',
+      );
+    }
+  }
+
+  // ── Upgrade anonymous → Apple ─────────────────────────────
+  Future<void> linkAndUpgradeAnonymousWithApple() async {
+    state = state.copyWith(status: AuthStatus.loading, errorMessage: null);
+    try {
+      final credential = await _repo.linkAnonymousWithAppleCredential();
+      if (credential == null) {
+        state = const AuthState(status: AuthStatus.unauthenticated);
+        return;
+      }
+      state = AuthState(
+        status: AuthStatus.authenticated,
+        user: credential.user,
+      );
+    } on FirebaseAuthException catch (e) {
+      state = AuthState(
+        status: AuthStatus.error,
+        errorMessage: _mapFirebaseError(e),
+      );
+    } catch (e) {
+      state = AuthState(
+        status: AuthStatus.error,
+        errorMessage: 'فشل الربط عبر Apple.',
+      );
+    }
+  }
+
   // ── Sign Out ──────────────────────────────────────────────
   Future<void> signOut() async {
     state = state.copyWith(status: AuthStatus.loading);
@@ -184,7 +310,7 @@ class AuthController extends Notifier<AuthState> {
     state = const AuthState(status: AuthStatus.unauthenticated);
   }
 
-  // ── Password Reset ────────────────────────────────────────
+  // ── Password Reset ──────────────────────────────────────────
   Future<void> sendPasswordResetEmail(String email) async {
     state = state.copyWith(status: AuthStatus.loading, errorMessage: null);
     try {
@@ -199,6 +325,6 @@ class AuthController extends Notifier<AuthState> {
   }
 }
 
-// ── Provider ─────────────────────────────────────────────────
+// ── Provider ──────────────────────────────────────────────────
 final authControllerProvider =
     NotifierProvider<AuthController, AuthState>(AuthController.new);

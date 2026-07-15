@@ -37,3 +37,13 @@ final firebaseStorageProvider = Provider<FirebaseStorage>((ref) {
 final firebaseMessagingProvider = Provider<FirebaseMessaging>((ref) {
   return FirebaseMessaging.instance;
 });
+
+/// True when the current signed-in user is an anonymous (guest) session.
+/// Reactive: rebuilds widgets when auth state changes.
+final isGuestProvider = Provider<bool>((ref) {
+  final authState = ref.watch(authStateChangesProvider);
+  return authState.maybeWhen(
+    data: (user) => user?.isAnonymous ?? false,
+    orElse: () => false,
+  );
+});
