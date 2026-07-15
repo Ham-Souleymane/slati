@@ -71,6 +71,10 @@
 	<string>نحتاج إلى معرض الصور لرفع صور المسجد ومستندات التحقق.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>نحتاج إلى موقعك لتحديد موقع المسجد على الخريطة.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>نحتاج إلى موقعك لتحديد أقرب المساجد وعرض أوقات الصلاة بدقة.</string>
+	<key>NSLocationAlwaysUsageDescription</key>
+	<string>نحتاج إلى موقعك لتحديد أقرب المساجد وعرض أوقات الصلاة بدقة.</string>
 	<key>UISupportedInterfaceOrientations</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
