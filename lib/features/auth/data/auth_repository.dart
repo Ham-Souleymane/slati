@@ -55,16 +55,17 @@ class AuthRepository implements IAuthRepository {
 
   final FirebaseAuth _auth;
 
-  // Configure GoogleSignIn with the web client ID
-  final GoogleSignIn _googleSignIn = GoogleSignIn(
-    serverClientId: '934105443254-o2sdu3n2avnn6ciqjpoadmiq2rmdidfd.apps.googleusercontent.com',
-  );
+  // google_sign_in v7: use the singleton — constructor was removed
+  final GoogleSignIn _googleSignIn = GoogleSignIn.instance;
   bool _googleSignInInitialized = false;
 
   /// Initializes google_sign_in exactly once.
+  /// serverClientId is the Web Client ID — required for Firebase to verify the ID token.
   Future<void> _ensureGoogleInitialized() async {
     if (_googleSignInInitialized) return;
-    await _googleSignIn.initialize();
+    await _googleSignIn.initialize(
+      serverClientId: '934105443254-o2sdu3n2avnn6ciqjpoadmiq2rmdidfd.apps.googleusercontent.com',
+    );
     _googleSignInInitialized = true;
   }
 
