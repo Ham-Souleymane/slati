@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Web Client ID from Firebase Console (OAuth 2.0 client type 3).
+         Required by google_sign_in v7 on Android as serverClientId. -->
+    <string name="default_web_client_id">934105443254-o2sdu3n2avnn6ciqjpoadmiq2rmdidfd.apps.googleusercontent.com</string>
+</resources>

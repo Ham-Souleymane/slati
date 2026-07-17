@@ -14,11 +14,11 @@
       },
       "oauth_client": [
         {
-          "client_id": "934105443254-pt2bdog0eg85k2eiqf5h93caovkttc72.apps.googleusercontent.com",
+          "client_id": "934105443254-fbn317aqgcr1r7o13o48spuaht876bgc.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {
             "package_name": "com.manbar.manbarAlmasjid",
-            "certificate_hash": "2fea42a1ee5d36a9c700cd2964c25faafbba5666"
+            "certificate_hash": "6a9b7ad51d5fae61fc69b75d80ec6736457487d3"
           }
         },
         {
@@ -58,11 +58,19 @@
       },
       "oauth_client": [
         {
-          "client_id": "934105443254-lsjc61k228mh3k1fr17e3ad7o5ifq8ak.apps.googleusercontent.com",
+          "client_id": "934105443254-80kjm844jscp31tcokvpdm8ppbvtdhc5.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {
             "package_name": "com.slatk.slatkapp",
-            "certificate_hash": "ff7d2b615f37bdf9e9346f03c23f6a11ac36e058"
+            "certificate_hash": "695c0feec408540f5accabfed1b0a2b77d44dae8"
+          }
+        },
+        {
+          "client_id": "934105443254-k4732p5rgk7umiq6hlgmt8u3l67p0kp2.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.slatk.slatkapp",
+            "certificate_hash": "57ed30cc26199e195fd1e614c62393c48020f99c"
           }
         },
         {
