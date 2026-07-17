@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:go_router/go_router.dart';
@@ -137,6 +138,12 @@ class NotificationService {
 
   /// Initializes FCM listeners and requests permission. Call AFTER Firebase.initializeApp().
   Future<void> initializeFcm() async {
+    // FCM push notifications are not supported on Flutter Web.
+    if (kIsWeb) {
+      debugPrint('[NotificationService] Skipping FCM init on Web.');
+      return;
+    }
+
     try {
       final fcm = FirebaseMessaging.instance;
 
@@ -180,28 +187,44 @@ class NotificationService {
       }
     };
 
+    // FCM deep-link listeners are not available on Flutter Web.
+    if (kIsWeb) {
+      debugPrint('[NotificationService] Skipping FCM navigation setup on Web.');
+      return;
+    }
+
     // B. Handle tap when app is in the background and opened via system tray
-    FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
-      final postId = message.data['postId'];
-      debugPrint('[NotificationService] Background notification tap, routing to post $postId');
-      if (postId != null && postId.isNotEmpty) {
-        router.push('/post/$postId');
-      }
-    });
+    try {
+      FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
+        final postId = message.data['postId'];
+        debugPrint('[NotificationService] Background notification tap, routing to post $postId');
+        if (postId != null && postId.isNotEmpty) {
+          router.push('/post/$postId');
+        }
+      });
+    } catch (e) {
+      debugPrint('[NotificationService] onMessageOpenedApp listener error: $e');
+    }
 
     // C. Handle tap when app was terminated and opened via notification
-    FirebaseMessaging.instance.getInitialMessage().then((RemoteMessage? message) {
-      if (message != null) {
-        final postId = message.data['postId'];
-        debugPrint('[NotificationService] Terminated notification tap, routing to post $postId');
-        if (postId != null && postId.isNotEmpty) {
-          // Wait a frame to ensure router and widgets are mounted
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            router.push('/post/$postId');
-          });
+    try {
+      FirebaseMessaging.instance.getInitialMessage().then((RemoteMessage? message) {
+        if (message != null) {
+          final postId = message.data['postId'];
+          debugPrint('[NotificationService] Terminated notification tap, routing to post $postId');
+          if (postId != null && postId.isNotEmpty) {
+            // Wait a frame to ensure router and widgets are mounted
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              router.push('/post/$postId');
+            });
+          }
         }
-      }
-    });
+      }).catchError((e) {
+        debugPrint('[NotificationService] getInitialMessage error: $e');
+      });
+    } catch (e) {
+      debugPrint('[NotificationService] getInitialMessage setup error: $e');
+    }
   }
 
   /// Shows a notification with details.
@@ -228,6 +251,8 @@ class NotificationService {
   }
 
   void _startTokenSync() {
+    if (kIsWeb) return;
+
     // Listen to current auth changes (covers login, logout, app start)
     FirebaseAuth.instance.authStateChanges().listen((User? user) async {
       if (user != null && !user.isAnonymous) {
@@ -236,12 +261,16 @@ class NotificationService {
     });
 
     // Listen to token refreshes
-    FirebaseMessaging.instance.onTokenRefresh.listen((String token) async {
-      final user = FirebaseAuth.instance.currentUser;
-      if (user != null && !user.isAnonymous) {
-        await _saveTokenToFirestore(user.uid);
-      }
-    });
+    try {
+      FirebaseMessaging.instance.onTokenRefresh.listen((String token) async {
+        final user = FirebaseAuth.instance.currentUser;
+        if (user != null && !user.isAnonymous) {
+          await _saveTokenToFirestore(user.uid);
+        }
+      });
+    } catch (e) {
+      debugPrint('[NotificationService] onTokenRefresh listener error: $e');
+    }
   }
 
   Future<void> _saveTokenToFirestore(String uid) async {

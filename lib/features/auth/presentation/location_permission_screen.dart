@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:permission_handler/permission_handler.dart';
 
 import '../../../core/providers/firebase_providers.dart';
 import '../../../core/theme/app_colors.dart';
@@ -23,18 +22,19 @@ class _LocationPermissionScreenState
 
   // ── Native Permission Request ────────────────────────────────
   Future<void> _requestLocation() async {
+    final myLocationText = context.tr('loc_my_location');
     setState(() => _isLoading = true);
     final locService = ref.read(locationServiceProvider);
 
     try {
-      final status = await locService.requestPermission();
-      if (status.isGranted) {
+      final isGranted = await locService.requestPermission();
+      if (isGranted) {
         final pos = await locService.getCurrentPosition();
         if (pos != null) {
           final newLoc = UserLocation(
             latitude: pos.latitude,
             longitude: pos.longitude,
-            name: context.tr('loc_my_location'),
+            name: myLocationText,
             isGps: true,
           );
 

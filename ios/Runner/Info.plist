@@ -65,10 +65,6 @@
 			</array>
 		</dict>
 	</array>
-	<key>NSCameraUsageDescription</key>
-	<string>نحتاج إلى الكاميرا لرفع صور المسجد ومستندات التحقق.</string>
-	<key>NSPhotoLibraryUsageDescription</key>
-	<string>نحتاج إلى معرض الصور لرفع صور المسجد ومستندات التحقق.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>نحتاج إلى موقعك لتحديد موقع المسجد على الخريطة.</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>

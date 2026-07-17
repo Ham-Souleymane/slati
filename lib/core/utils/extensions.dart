@@ -105,8 +105,9 @@ extension BuildContextX on BuildContext {
               width: double.infinity,
               child: ElevatedButton(
                 onPressed: () {
+                  final router = GoRouter.of(this);
                   Navigator.pop(ctx);
-                  ctx.go('/register');
+                  router.go('/register');
                 },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.emerald,

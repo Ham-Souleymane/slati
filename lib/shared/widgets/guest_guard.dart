@@ -123,8 +123,9 @@ class _GuestPromptSheet extends StatelessWidget {
             height: 52,
             child: ElevatedButton(
               onPressed: () {
+                final router = GoRouter.of(context);
                 Navigator.pop(context);
-                context.go(AppRoutes.register);
+                router.go(AppRoutes.register);
               },
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.emerald,

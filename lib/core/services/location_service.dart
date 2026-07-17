@@ -77,20 +77,32 @@ final userLocationProvider =
 
 /// Location Service to check/request permissions and fetch GPS.
 class LocationService {
-  /// Request location permission using permission_handler.
-  Future<PermissionStatus> requestPermission() async {
-    return Permission.locationWhenInUse.request();
+  /// Request location permission. Returns true if granted.
+  Future<bool> requestPermission() async {
+    if (kIsWeb) {
+      final status = await Geolocator.requestPermission();
+      return status == LocationPermission.always || status == LocationPermission.whileInUse;
+    } else {
+      final status = await Permission.locationWhenInUse.request();
+      return status.isGranted;
+    }
   }
 
-  /// Check permission status.
-  Future<PermissionStatus> checkPermission() async {
-    return Permission.locationWhenInUse.status;
+  /// Check permission status. Returns true if granted.
+  Future<bool> checkPermission() async {
+    if (kIsWeb) {
+      final status = await Geolocator.checkPermission();
+      return status == LocationPermission.always || status == LocationPermission.whileInUse;
+    } else {
+      final status = await Permission.locationWhenInUse.status;
+      return status.isGranted;
+    }
   }
 
   /// Fetch coordinates using Geolocator if permissions are granted.
   Future<Position?> getCurrentPosition() async {
-    final status = await checkPermission();
-    if (!status.isGranted) return null;
+    final isGranted = await checkPermission();
+    if (!isGranted) return null;
 
     final serviceEnabled = await Geolocator.isLocationServiceEnabled();
     if (!serviceEnabled) return null;
@@ -102,6 +114,7 @@ class LocationService {
           timeLimit: Duration(seconds: 10),
         ),
       );
+
     } catch (e) {
       debugPrint('Geolocator error: $e');
       // Try last known position if active retrieval times out/fails
