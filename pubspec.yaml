@@ -1,7 +1,7 @@
 name: manbar_almasjid
 description: "Manbar AlMasjid – Imam App for mosque management, prayer times, and community posts."
 publish_to: "none"
-version: 1.0.0+2
+version: 1.0.0+3
 
 environment:
   sdk: ">=3.4.0 <4.0.0"
