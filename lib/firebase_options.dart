@@ -81,7 +81,7 @@ class DefaultFirebaseOptions {
     messagingSenderId: '934105443254',
     projectId: 'dinapp-3eadd',
     storageBucket: 'dinapp-3eadd.firebasestorage.app',
-    iosClientId: '934105443254-lnpkt926q2gloa0hdqne676vcc3bkpqf.apps.googleusercontent.com',
+    iosClientId: '934105443254-ajq2q6m9mq26e8krfr10a9b6q2ul7opf.apps.googleusercontent.com',
     iosBundleId: 'com.manbar.manbarAlmasjid',
   );
 

@@ -55,8 +55,10 @@ class AuthRepository implements IAuthRepository {
 
   final FirebaseAuth _auth;
 
-  // google_sign_in v7: use the singleton, not a constructor
-  final GoogleSignIn _googleSignIn = GoogleSignIn.instance;
+  // Configure GoogleSignIn with the web client ID
+  final GoogleSignIn _googleSignIn = GoogleSignIn(
+    serverClientId: '934105443254-o2sdu3n2avnn6ciqjpoadmiq2rmdidfd.apps.googleusercontent.com',
+  );
   bool _googleSignInInitialized = false;
 
   /// Initializes google_sign_in exactly once.
