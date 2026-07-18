@@ -109,10 +109,12 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
     final authState = ref.read(authControllerProvider);
     if (authState.hasError) {
       setState(() => _isSubmitting = false);
-      context.showSnackBar(authState.errorMessage ?? context.tr('error_occurred'), isError: true);
+      context.showSnackBar(
+        authState.errorMessage ?? context.tr('error_occurred'),
+        isError: true,
+      );
       return;
     }
-
 
     // Step 2: Write users/{uid} doc
     final uid = ref.read(firebaseAuthProvider).currentUser?.uid;
@@ -141,7 +143,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
     if (!mounted) return;
     setState(() => _isSubmitting = false);
 
-    // Step 3: Route to home (location permission screen placeholder)
+    // Step 3: Route to home
     context.go(AppRoutes.home);
   }
 
@@ -162,22 +164,28 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
     final state = ref.read(authControllerProvider);
     if (state.hasError) {
       context.showSnackBar(
-          state.errorMessage ?? context.tr('register_google_failed'),
-          isError: true);
+        state.errorMessage ?? context.tr('register_google_failed'),
+        isError: true,
+      );
       return;
     }
-
+    // User cancelled — do nothing
+    if (ref.read(firebaseAuthProvider).currentUser == null) return;
 
     // Create user doc from Google profile
     final user = ref.read(firebaseAuthProvider).currentUser;
     if (user != null) {
-      await ref.read(userRepositoryProvider).createUserDoc(
-            uid: user.uid,
-            fullName: user.displayName ?? context.tr('anonymous'),
-            email: user.email,
-            photoUrl: user.photoURL,
-            isGuest: false,
-          );
+      try {
+        await ref.read(userRepositoryProvider).createUserDoc(
+              uid: user.uid,
+              fullName: user.displayName ?? context.tr('anonymous'),
+              email: user.email,
+              photoUrl: user.photoURL,
+              isGuest: false,
+            );
+      } catch (e) {
+        debugPrint('RegisterScreen: Google user doc creation failed: $e');
+      }
     }
 
     if (mounted) context.go(AppRoutes.home);
@@ -199,21 +207,31 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
     final state = ref.read(authControllerProvider);
     if (state.hasError) {
       context.showSnackBar(
-          state.errorMessage ?? context.tr('register_apple_failed'),
-          isError: true);
+        state.errorMessage ?? context.tr('register_apple_failed'),
+        isError: true,
+      );
       return;
     }
-
+    // User cancelled — do nothing
+    if (ref.read(firebaseAuthProvider).currentUser == null) return;
 
     final user = ref.read(firebaseAuthProvider).currentUser;
     if (user != null) {
-      await ref.read(userRepositoryProvider).createUserDoc(
-            uid: user.uid,
-            fullName: user.displayName ?? context.tr('anonymous'),
-            email: user.email,
-            photoUrl: user.photoURL,
-            isGuest: false,
-          );
+      // Apple only provides name on first sign-in; fall back gracefully
+      final fullName = (user.displayName != null && user.displayName!.isNotEmpty)
+          ? user.displayName!
+          : context.tr('anonymous');
+      try {
+        await ref.read(userRepositoryProvider).createUserDoc(
+              uid: user.uid,
+              fullName: fullName,
+              email: user.email,
+              photoUrl: user.photoURL,
+              isGuest: false,
+            );
+      } catch (e) {
+        debugPrint('RegisterScreen: Apple user doc creation failed: $e');
+      }
     }
 
     if (mounted) context.go(AppRoutes.home);
@@ -224,11 +242,9 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
     final authState = ref.watch(authControllerProvider);
     final isLoading = _isSubmitting || authState.isLoading;
 
-    ref.listen<AuthState>(authControllerProvider, (_, next) {
-      if (next.hasError) {
-        context.showSnackBar(next.errorMessage ?? context.tr('error_occurred'), isError: true);
-      }
-    });
+    // NOTE: Error snackbars are shown directly inside each action method
+    // (_submit, _signUpWithGoogle, _signUpWithApple) to avoid stale-state
+    // double-fires that a global ref.listen would cause.
 
 
     return Scaffold(

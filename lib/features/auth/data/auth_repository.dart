@@ -160,8 +160,16 @@ class AuthRepository implements IAuthRepository {
       webAuthenticationOptions: webOptions,
     );
 
+    final identityToken = appleCredential.identityToken;
+    if (identityToken == null) {
+      throw FirebaseAuthException(
+        code: 'invalid-credential',
+        message: 'Apple did not return an identity token.',
+      );
+    }
+
     final credential = OAuthProvider("apple.com").credential(
-      idToken: appleCredential.identityToken,
+      idToken: identityToken,
       rawNonce: rawNonce,
     );
 
@@ -273,8 +281,16 @@ class AuthRepository implements IAuthRepository {
       webAuthenticationOptions: webOptions,
     );
 
+    final identityToken = appleCredential.identityToken;
+    if (identityToken == null) {
+      throw FirebaseAuthException(
+        code: 'invalid-credential',
+        message: 'Apple did not return an identity token.',
+      );
+    }
+
     final credential = OAuthProvider('apple.com').credential(
-      idToken: appleCredential.identityToken,
+      idToken: identityToken,
       rawNonce: rawNonce,
     );
 

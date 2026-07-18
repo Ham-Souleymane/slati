@@ -345,8 +345,8 @@ class AppLocalizations {
       'loc_permission_failed': 'فشل الوصول للموقع الحالي. يرجى إدخاله يدوياً.',
       'loc_error': 'حدث خطأ أثناء تحديد الموقع.',
       'loc_title': 'تحديد موقعك الحالي',
-      'loc_desc': 'يرجى السماح بالوصول لموقعك الجغرافي لعرض أوقات الصلاة بدقة بالغة وتحديد أقرب المساجد من حولك.',
-      'loc_allow_btn': 'السماح باستخدام الموقع',
+      'loc_desc': 'لعرض أوقات الصلاة بدقة وتحديد أقرب المساجد، يحتاج التطبيق إلى الوصول لموقعك الجغرافي.',
+      'loc_allow_btn': 'متابعة',
       'loc_manual_btn': 'إدخال الموقع يدوياً',
       'loc_select_city': 'اختر مدينتك',
       'loc_select_city_desc': 'اختر من المدن المتاحة لعرض أوقات الصلاة والمساجد القريبة منها.',
@@ -725,8 +725,8 @@ class AppLocalizations {
       'loc_permission_failed': 'Failed to access current location. Please enter manually.',
       'loc_error': 'An error occurred while determining location.',
       'loc_title': 'Determine Your Location',
-      'loc_desc': 'Please allow location access to display prayer times with extreme accuracy and find nearby mosques around you.',
-      'loc_allow_btn': 'Allow Location Access',
+      'loc_desc': 'To display accurate prayer times and find nearby mosques, the app needs access to your location.',
+      'loc_allow_btn': 'Continue',
       'loc_manual_btn': 'Enter Location Manually',
       'loc_select_city': 'Select Your City',
       'loc_select_city_desc': 'Select from available cities to view prayer times and nearby mosques.',
@@ -778,7 +778,7 @@ class AppLocalizations {
     String value = _localizedValues[locale.languageCode]?[key] ?? key;
     if (arguments != null) {
       arguments.forEach((k, v) {
-        value = value.replaceAll('${k}', v);
+        value = value.replaceAll(k, v);
       });
     }
     return value;
