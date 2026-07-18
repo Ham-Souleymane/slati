@@ -1,13 +1,13 @@
-# Firebase Setup Guide – Manbar AlMasjid
+# Firebase Setup Guide – Slatk
 
-This guide outlines the step-by-step instructions to configure Firebase and Google Sign-In for the **Manbar AlMasjid** app.
+This guide outlines the step-by-step instructions to configure Firebase and Google Sign-In for the **Slatk** app.
 
 ---
 
 ## Phase 1: Create a Firebase Project
 
 1. Go to the [Firebase Console](https://console.firebase.google.com/).
-2. Click **Add project** and name it `manbar-almasjid` (or choose your preferred name).
+2. Click **Add project** and name it `slatkapp` (or choose your preferred name).
 3. (Optional) Enable Google Analytics for the project.
 4. Click **Create project** and wait for provisioning.
 
@@ -19,8 +19,8 @@ This guide outlines the step-by-step instructions to configure Firebase and Goog
 
 #### Step A: Register the App
 1. Inside your Firebase project dashboard, click the **Android icon** to add an Android app.
-2. Enter the Package Name: `com.manbar.manbarAlmasjid`.
-3. (Optional) Enter the App Nickname: `Manbar AlMasjid Android`.
+2. Enter the Package Name: `com.slatk.slatkapp`.
+3. (Optional) Enter the App Nickname: `Slatk Android`.
 4. **Important for Google Sign-in**: Enter your SHA-1 fingerprint.
    - To generate SHA fingerprints on your local machine, run:
      ```powershell
@@ -61,8 +61,8 @@ This guide outlines the step-by-step instructions to configure Firebase and Goog
 
 #### Step A: Register the App
 1. Inside your Firebase project dashboard, click **Add app** and select the **iOS icon**.
-2. Enter the Bundle ID: `com.manbar.manbarAlmasjid` (ensure this matches the Bundle Identifier in Xcode).
-3. Enter App Nickname: `Manbar AlMasjid iOS`.
+2. Enter the Bundle ID: `com.slatk.slatkapp` (ensure this matches the Bundle Identifier in Xcode).
+3. Enter App Nickname: `Slatk iOS`.
 4. Click **Register App**.
 
 #### Step B: Add Configuration Files

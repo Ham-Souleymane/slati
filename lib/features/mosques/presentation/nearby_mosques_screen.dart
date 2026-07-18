@@ -320,7 +320,7 @@ class _NearbyMosquesScreenState extends ConsumerState<NearbyMosquesScreen> {
       children: [
         TileLayer(
           urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-          userAgentPackageName: 'com.manbar.manbarAlmasjid',
+          userAgentPackageName: 'com.slatk.slatkapp',
         ),
         MarkerLayer(markers: markers),
       ],

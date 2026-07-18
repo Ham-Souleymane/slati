@@ -67,7 +67,7 @@ class DefaultFirebaseOptions {
   // Values from android/app/google-services.json
   static const FirebaseOptions android = FirebaseOptions(
     apiKey: 'AIzaSyCop8-t-igl8MT3w3OQjIV2LmqDhZvYlMQ',
-    appId: '1:934105443254:android:a027add3d694074b6eef17',
+    appId: '1:934105443254:android:71913ebe5bdbfd006eef17',
     messagingSenderId: '934105443254',
     projectId: 'dinapp-3eadd',
     storageBucket: 'dinapp-3eadd.firebasestorage.app',
@@ -77,12 +77,12 @@ class DefaultFirebaseOptions {
   // Values from ios/Runner/GoogleService-Info.plist
   static const FirebaseOptions ios = FirebaseOptions(
     apiKey: 'AIzaSyA5LNGxFd3xb22QWMbVoGvQN21Pw-EsDfs',
-    appId: '1:934105443254:ios:2458c6872d117a416eef17',
+    appId: '1:934105443254:ios:b879ed4172cbee7d6eef17',
     messagingSenderId: '934105443254',
     projectId: 'dinapp-3eadd',
     storageBucket: 'dinapp-3eadd.firebasestorage.app',
     iosClientId: '934105443254-ajq2q6m9mq26e8krfr10a9b6q2ul7opf.apps.googleusercontent.com',
-    iosBundleId: 'com.manbar.manbarAlmasjid',
+    iosBundleId: 'com.slatk.slatkapp',
   );
 
   // ── Web ──────────────────────────────────────────────────────────────────

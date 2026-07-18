@@ -1,4 +1,4 @@
-package com.manbar.manbar_almasjid
+package com.slatk.slatkapp
 
 import io.flutter.embedding.android.FlutterActivity
 

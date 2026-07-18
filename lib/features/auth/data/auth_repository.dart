@@ -145,7 +145,7 @@ class AuthRepository implements IAuthRepository {
     WebAuthenticationOptions? webOptions;
     if (kIsWeb || defaultTargetPlatform == TargetPlatform.android) {
       webOptions = WebAuthenticationOptions(
-        clientId: 'com.manbar.manbarAlmasjid.service',
+        clientId: 'com.slatk.slatkapp.service',
         redirectUri: Uri.parse(
             'https://dinapp-3eadd.firebaseapp.com/__/auth/handler'),
       );
@@ -266,7 +266,7 @@ class AuthRepository implements IAuthRepository {
     WebAuthenticationOptions? webOptions;
     if (kIsWeb || defaultTargetPlatform == TargetPlatform.android) {
       webOptions = WebAuthenticationOptions(
-        clientId: 'com.manbar.manbarAlmasjid.service',
+        clientId: 'com.slatk.slatkapp.service',
         redirectUri: Uri.parse(
             'https://dinapp-3eadd.firebaseapp.com/__/auth/handler'),
       );
