@@ -42,6 +42,7 @@ class AuthController extends Notifier<AuthState> {
 
   // ── Helpers ──────────────────────────────────────────────────
   String _mapFirebaseError(FirebaseAuthException e) {
+    debugPrint('[AuthController] FirebaseAuthException: code=${e.code}, message=${e.message}');
     switch (e.code) {
       case 'user-not-found':
         return 'لم يتم العثور على حساب بهذا البريد الإلكتروني.';
@@ -62,9 +63,9 @@ class AuthController extends Notifier<AuthState> {
       case 'account-exists-with-different-credential':
         return 'الحساب موجود بطريقة تسجيل دخول مختلفة.';
       case 'operation-not-allowed':
-        return 'تسجيل الدخول عبر Apple غير متاح على هذا الجهاز. تأكد من تسجيل الدخول إلى iCloud.';
+        return 'طريقة تسجيل الدخول هذه غير مفعلة. يرجى تفعيل البريد الإلكتروني/كلمة المرور في Firebase Console.';
       default:
-        return 'حدث خطأ غير متوقع: ${e.message}';
+        return 'حدث خطأ: ${e.message ?? e.code}';
     }
   }
 

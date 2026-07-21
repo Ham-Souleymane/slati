@@ -96,7 +96,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
         email: _emailController.text.trim(),
         password: _passwordController.text,
       );
-    } else if (currentUser == null) {
+    } else {
       await controller.createUserWithEmailAndPassword(
         email: _emailController.text.trim(),
         password: _passwordController.text,

@@ -218,7 +218,6 @@ class AuthRepository implements IAuthRepository {
     return _auth.signInAnonymously();
   }
 
-  // ── Credential Linking (anonymous → real account) ────────────
   @override
   Future<UserCredential> linkAnonymousWithEmailCredential({
     required String email,
@@ -233,10 +232,11 @@ class AuthRepository implements IAuthRepository {
         );
         return await current.linkWithCredential(credential);
       } on FirebaseAuthException catch (e) {
-        // If already linked or credential in use — fall back to normal sign-up
+        debugPrint('[AuthRepository] linkAnonymousWithEmailCredential exception: code=${e.code}, message=${e.message}');
         if (e.code == 'provider-already-linked' ||
             e.code == 'credential-already-in-use' ||
-            e.code == 'email-already-in-use') {
+            e.code == 'email-already-in-use' ||
+            e.code == 'invalid-credential') {
           return _auth.createUserWithEmailAndPassword(
             email: email.trim(),
             password: password,
