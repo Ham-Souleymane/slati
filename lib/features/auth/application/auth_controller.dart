@@ -49,7 +49,7 @@ class AuthController extends Notifier<AuthState> {
       case 'wrong-password':
         return 'كلمة المرور غير صحيحة.';
       case 'invalid-credential':
-        return 'بيانات الاعتماد غير صحيحة. تحقق من البريد وكلمة المرور.';
+        return 'بيانات الاعتماد غير صحيحة. تحقق من البريد وكلمة المرور (أو تأكد من تفعيل تسجيل الدخول بالبريد في Firebase Console).';
       case 'email-already-in-use':
         return 'هذا البريد الإلكتروني مستخدم بالفعل.';
       case 'weak-password':
