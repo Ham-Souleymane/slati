@@ -139,6 +139,16 @@ class AuthRepository implements IAuthRepository {
   // ── Apple Sign-In ────────────────────────────────────────────
   @override
   Future<UserCredential?> signInWithApple() async {
+    // Guard: Sign in with Apple may be unavailable (e.g. iCloud not signed in).
+    final available = await SignInWithApple.isAvailable();
+    if (!available) {
+      throw FirebaseAuthException(
+        code: 'operation-not-allowed',
+        message: 'Sign in with Apple is not available on this device. '
+            'Please ensure you are signed in to iCloud.',
+      );
+    }
+
     final rawNonce = _generateNonce();
     final shaNonce = _sha256ofString(rawNonce);
 
@@ -151,29 +161,41 @@ class AuthRepository implements IAuthRepository {
       );
     }
 
-    final appleCredential = await SignInWithApple.getAppleIDCredential(
-      scopes: [
-        AppleIDAuthorizationScopes.email,
-        AppleIDAuthorizationScopes.fullName,
-      ],
-      nonce: shaNonce,
-      webAuthenticationOptions: webOptions,
-    );
-
-    final identityToken = appleCredential.identityToken;
-    if (identityToken == null) {
-      throw FirebaseAuthException(
-        code: 'invalid-credential',
-        message: 'Apple did not return an identity token.',
+    try {
+      final appleCredential = await SignInWithApple.getAppleIDCredential(
+        scopes: [
+          AppleIDAuthorizationScopes.email,
+          AppleIDAuthorizationScopes.fullName,
+        ],
+        nonce: shaNonce,
+        webAuthenticationOptions: webOptions,
       );
+
+      final identityToken = appleCredential.identityToken;
+      if (identityToken == null) {
+        throw FirebaseAuthException(
+          code: 'invalid-credential',
+          message: 'Apple did not return an identity token.',
+        );
+      }
+
+      final credential = OAuthProvider('apple.com').credential(
+        idToken: identityToken,
+        rawNonce: rawNonce,
+      );
+
+      return _auth.signInWithCredential(credential);
+    } on SignInWithAppleAuthorizationException catch (e) {
+      debugPrint('[AppleSignIn] Authorization exception: code=${e.code}, message=${e.message}');
+      if (e.code == AuthorizationErrorCode.canceled) {
+        // User dismissed the Apple sign-in sheet — not an error.
+        return null;
+      }
+      rethrow;
+    } catch (e, stack) {
+      debugPrint('[AppleSignIn] Unexpected error: $e\n$stack');
+      rethrow;
     }
-
-    final credential = OAuthProvider("apple.com").credential(
-      idToken: identityToken,
-      rawNonce: rawNonce,
-    );
-
-    return _auth.signInWithCredential(credential);
   }
 
   String _generateNonce([int length = 32]) {
@@ -260,6 +282,16 @@ class AuthRepository implements IAuthRepository {
 
   @override
   Future<UserCredential?> linkAnonymousWithAppleCredential() async {
+    // Guard: Sign in with Apple may be unavailable (e.g. iCloud not signed in).
+    final available = await SignInWithApple.isAvailable();
+    if (!available) {
+      throw FirebaseAuthException(
+        code: 'operation-not-allowed',
+        message: 'Sign in with Apple is not available on this device. '
+            'Please ensure you are signed in to iCloud.',
+      );
+    }
+
     final rawNonce = _generateNonce();
     final shaNonce = _sha256ofString(rawNonce);
 
@@ -272,41 +304,53 @@ class AuthRepository implements IAuthRepository {
       );
     }
 
-    final appleCredential = await SignInWithApple.getAppleIDCredential(
-      scopes: [
-        AppleIDAuthorizationScopes.email,
-        AppleIDAuthorizationScopes.fullName,
-      ],
-      nonce: shaNonce,
-      webAuthenticationOptions: webOptions,
-    );
-
-    final identityToken = appleCredential.identityToken;
-    if (identityToken == null) {
-      throw FirebaseAuthException(
-        code: 'invalid-credential',
-        message: 'Apple did not return an identity token.',
+    try {
+      final appleCredential = await SignInWithApple.getAppleIDCredential(
+        scopes: [
+          AppleIDAuthorizationScopes.email,
+          AppleIDAuthorizationScopes.fullName,
+        ],
+        nonce: shaNonce,
+        webAuthenticationOptions: webOptions,
       );
-    }
 
-    final credential = OAuthProvider('apple.com').credential(
-      idToken: identityToken,
-      rawNonce: rawNonce,
-    );
-
-    final current = _auth.currentUser;
-    if (current != null && current.isAnonymous) {
-      try {
-        return await current.linkWithCredential(credential);
-      } on FirebaseAuthException catch (e) {
-        if (e.code == 'credential-already-in-use' ||
-            e.code == 'provider-already-linked') {
-          return _auth.signInWithCredential(credential);
-        }
-        rethrow;
+      final identityToken = appleCredential.identityToken;
+      if (identityToken == null) {
+        throw FirebaseAuthException(
+          code: 'invalid-credential',
+          message: 'Apple did not return an identity token.',
+        );
       }
+
+      final credential = OAuthProvider('apple.com').credential(
+        idToken: identityToken,
+        rawNonce: rawNonce,
+      );
+
+      final current = _auth.currentUser;
+      if (current != null && current.isAnonymous) {
+        try {
+          return await current.linkWithCredential(credential);
+        } on FirebaseAuthException catch (e) {
+          if (e.code == 'credential-already-in-use' ||
+              e.code == 'provider-already-linked') {
+            return _auth.signInWithCredential(credential);
+          }
+          rethrow;
+        }
+      }
+      return _auth.signInWithCredential(credential);
+    } on SignInWithAppleAuthorizationException catch (e) {
+      debugPrint('[AppleSignIn] Authorization exception: code=${e.code}, message=${e.message}');
+      if (e.code == AuthorizationErrorCode.canceled) {
+        // User dismissed the Apple sign-in sheet — not an error.
+        return null;
+      }
+      rethrow;
+    } catch (e, stack) {
+      debugPrint('[AppleSignIn] Unexpected error: $e\n$stack');
+      rethrow;
     }
-    return _auth.signInWithCredential(credential);
   }
 
   // ── Sign Out ──────────────────────────────────────────────────

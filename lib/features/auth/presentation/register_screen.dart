@@ -169,8 +169,9 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
       );
       return;
     }
-    // User cancelled — do nothing
-    if (ref.read(firebaseAuthProvider).currentUser == null) return;
+    // User cancelled — do nothing (also catches anonymous users who didn't complete sign-in)
+    final currentUserAfterGoogle = ref.read(firebaseAuthProvider).currentUser;
+    if (currentUserAfterGoogle == null || currentUserAfterGoogle.isAnonymous) return;
 
     // Create user doc from Google profile
     final user = ref.read(firebaseAuthProvider).currentUser;
@@ -212,26 +213,25 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
       );
       return;
     }
-    // User cancelled — do nothing
-    if (ref.read(firebaseAuthProvider).currentUser == null) return;
+    // User cancelled — do nothing (also catches anonymous users who didn't complete sign-in)
+    final currentUserAfterApple = ref.read(firebaseAuthProvider).currentUser;
+    if (currentUserAfterApple == null || currentUserAfterApple.isAnonymous) return;
 
-    final user = ref.read(firebaseAuthProvider).currentUser;
-    if (user != null) {
-      // Apple only provides name on first sign-in; fall back gracefully
-      final fullName = (user.displayName != null && user.displayName!.isNotEmpty)
-          ? user.displayName!
-          : context.tr('anonymous');
-      try {
-        await ref.read(userRepositoryProvider).createUserDoc(
-              uid: user.uid,
-              fullName: fullName,
-              email: user.email,
-              photoUrl: user.photoURL,
-              isGuest: false,
-            );
-      } catch (e) {
-        debugPrint('RegisterScreen: Apple user doc creation failed: $e');
-      }
+    final user = currentUserAfterApple;
+    // Apple only provides name on first sign-in; fall back gracefully
+    final fullName = (user.displayName != null && user.displayName!.isNotEmpty)
+        ? user.displayName!
+        : context.tr('anonymous');
+    try {
+      await ref.read(userRepositoryProvider).createUserDoc(
+            uid: user.uid,
+            fullName: fullName,
+            email: user.email,
+            photoUrl: user.photoURL,
+            isGuest: false,
+          );
+    } catch (e) {
+      debugPrint('RegisterScreen: Apple user doc creation failed: $e');
     }
 
     if (mounted) context.go(AppRoutes.home);

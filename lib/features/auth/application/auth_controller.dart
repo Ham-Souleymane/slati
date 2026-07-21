@@ -61,6 +61,8 @@ class AuthController extends Notifier<AuthState> {
         return 'فشل الاتصال بالشبكة. تحقق من الإنترنت.';
       case 'account-exists-with-different-credential':
         return 'الحساب موجود بطريقة تسجيل دخول مختلفة.';
+      case 'operation-not-allowed':
+        return 'تسجيل الدخول عبر Apple غير متاح على هذا الجهاز. تأكد من تسجيل الدخول إلى iCloud.';
       default:
         return 'حدث خطأ غير متوقع: ${e.message}';
     }
@@ -157,7 +159,7 @@ class AuthController extends Notifier<AuthState> {
     try {
       final credential = await _repo.signInWithApple();
       if (credential == null) {
-        // User cancelled
+        // User cancelled the Apple sign-in sheet — not an error.
         state = const AuthState(status: AuthStatus.unauthenticated);
         return;
       }
@@ -166,14 +168,16 @@ class AuthController extends Notifier<AuthState> {
         user: credential.user,
       );
     } on FirebaseAuthException catch (e) {
+      debugPrint('[AuthController] Apple FirebaseAuthException: code=${e.code}, message=${e.message}');
       state = AuthState(
         status: AuthStatus.error,
         errorMessage: _mapFirebaseError(e),
       );
-    } catch (e) {
+    } catch (e, stack) {
+      debugPrint('[AuthController] Apple unexpected error: $e\n$stack');
       state = AuthState(
         status: AuthStatus.error,
-        errorMessage: 'فشل تسجيل الدخول عبر Apple.',
+        errorMessage: 'فشل تسجيل الدخول عبر Apple. ($e)',
       );
     }
   }
@@ -277,12 +281,13 @@ class AuthController extends Notifier<AuthState> {
     }
   }
 
-  // ── Upgrade anonymous → Apple ─────────────────────────────
+  // ── Upgrade anonymous → Apple ─────────────────────────────────
   Future<void> linkAndUpgradeAnonymousWithApple() async {
     state = state.copyWith(status: AuthStatus.loading, errorMessage: null);
     try {
       final credential = await _repo.linkAnonymousWithAppleCredential();
       if (credential == null) {
+        // User cancelled the Apple sign-in sheet — not an error.
         state = const AuthState(status: AuthStatus.unauthenticated);
         return;
       }
@@ -291,14 +296,16 @@ class AuthController extends Notifier<AuthState> {
         user: credential.user,
       );
     } on FirebaseAuthException catch (e) {
+      debugPrint('[AuthController] Apple link FirebaseAuthException: code=${e.code}, message=${e.message}');
       state = AuthState(
         status: AuthStatus.error,
         errorMessage: _mapFirebaseError(e),
       );
-    } catch (e) {
+    } catch (e, stack) {
+      debugPrint('[AuthController] Apple link unexpected error: $e\n$stack');
       state = AuthState(
         status: AuthStatus.error,
-        errorMessage: 'فشل الربط عبر Apple.',
+        errorMessage: 'فشل الربط عبر Apple. ($e)',
       );
     }
   }
