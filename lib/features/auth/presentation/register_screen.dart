@@ -162,9 +162,9 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
 
     if (!mounted) return;
     final state = ref.read(authControllerProvider);
-    if (state.hasError) {
+    if (state.hasError && state.errorMessage != null && state.errorMessage!.isNotEmpty) {
       context.showSnackBar(
-        state.errorMessage ?? context.tr('register_google_failed'),
+        state.errorMessage!,
         isError: true,
       );
       return;
@@ -206,9 +206,9 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
 
     if (!mounted) return;
     final state = ref.read(authControllerProvider);
-    if (state.hasError) {
+    if (state.hasError && state.errorMessage != null && state.errorMessage!.isNotEmpty) {
       context.showSnackBar(
-        state.errorMessage ?? context.tr('register_apple_failed'),
+        state.errorMessage!,
         isError: true,
       );
       return;

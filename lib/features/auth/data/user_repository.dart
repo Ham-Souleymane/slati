@@ -25,6 +25,8 @@ class UserRepository {
     String? city,
     String? photoUrl,
     String? fcmToken,
+    String role = 'worshipper',
+    String? mosqueId,
   }) async {
     final doc = UserModel(
       id: uid,
@@ -35,6 +37,8 @@ class UserRepository {
       photoUrl: photoUrl,
       fcmToken: fcmToken,
       isGuest: isGuest,
+      role: role,
+      mosqueId: mosqueId,
       createdAt: DateTime.now(),
     );
     await _users.doc(uid).set(doc.toFirestore());

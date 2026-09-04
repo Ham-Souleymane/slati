@@ -72,8 +72,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
 
     if (!mounted) return;
     final state = ref.read(authControllerProvider);
-    if (state.hasError) {
-      context.showSnackBar(state.errorMessage ?? context.tr('error_occurred'), isError: true);
+    if (state.hasError && state.errorMessage != null && state.errorMessage!.isNotEmpty) {
+      context.showSnackBar(state.errorMessage!, isError: true);
     }
   }
 
@@ -82,10 +82,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
     await ref.read(authControllerProvider.notifier).signInWithGoogle();
     if (!mounted) return;
     final state = ref.read(authControllerProvider);
-    if (state.hasError) {
-      context.showSnackBar(
-          state.errorMessage ?? context.tr('login_google_failed'),
-          isError: true);
+    if (state.hasError && state.errorMessage != null && state.errorMessage!.isNotEmpty) {
+      context.showSnackBar(state.errorMessage!, isError: true);
     }
   }
 
@@ -94,10 +92,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
     await ref.read(authControllerProvider.notifier).signInWithApple();
     if (!mounted) return;
     final state = ref.read(authControllerProvider);
-    if (state.hasError) {
-      context.showSnackBar(
-          state.errorMessage ?? context.tr('login_apple_failed'),
-          isError: true);
+    if (state.hasError && state.errorMessage != null && state.errorMessage!.isNotEmpty) {
+      context.showSnackBar(state.errorMessage!, isError: true);
     }
   }
 
@@ -110,10 +106,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
     if (!mounted) return;
     final state = ref.read(authControllerProvider);
     debugPrint('[LoginScreen] AuthState status: ${state.status}, error: ${state.errorMessage}');
-    if (state.hasError) {
-      context.showSnackBar(
-          state.errorMessage ?? context.tr('login_guest_failed'),
-          isError: true);
+    if (state.hasError && state.errorMessage != null && state.errorMessage!.isNotEmpty) {
+      context.showSnackBar(state.errorMessage!, isError: true);
     }
   }
 
@@ -165,12 +159,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
   Widget build(BuildContext context) {
     final authState = ref.watch(authControllerProvider);
     final isLoading = authState.isLoading;
-
-    ref.listen<AuthState>(authControllerProvider, (_, next) {
-      if (next.hasError) {
-        context.showSnackBar(next.errorMessage ?? context.tr('error_occurred'), isError: true);
-      }
-    });
 
     final currentLocale = ref.watch(localeProvider);
     final isAr = currentLocale.languageCode == 'ar';
@@ -484,6 +472,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
+      useRootNavigator: true,
       backgroundColor: Colors.transparent,
       builder: (_) => _ForgotPasswordSheet(
         emailController: emailController,

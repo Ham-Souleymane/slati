@@ -48,6 +48,7 @@ extension BuildContextX on BuildContext {
     showModalBottomSheet<void>(
       context: this,
       backgroundColor: Colors.transparent,
+      useRootNavigator: true,
       builder: (ctx) => Container(
         decoration: const BoxDecoration(
           color: AppColors.cream,

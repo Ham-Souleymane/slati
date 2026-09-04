@@ -1,14 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:hijri/hijri_calendar.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../core/providers/firebase_providers.dart';
+import '../../../core/router/app_router.dart';
+import '../../../core/services/notification_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/extensions.dart';
-import '../../../core/services/notification_service.dart';
 import '../../mosques/data/mosque_repository.dart';
 import '../../mosques/domain/mosque_prayer_times_model.dart';
 import '../data/prayer_service.dart';
@@ -28,6 +30,7 @@ class _FullPrayerTimesScreenState extends ConsumerState<FullPrayerTimesScreen> {
   PrayerMode _selectedMode = PrayerMode.location;
   String? _selectedMosqueId;
   final Map<String, bool> _alerts = {};
+  bool _ongoingBarEnabled = true;
   SharedPreferences? _prefs;
   final DateTime _now = DateTime.now();
 
@@ -41,6 +44,8 @@ class _FullPrayerTimesScreenState extends ConsumerState<FullPrayerTimesScreen> {
     _prefs = await SharedPreferences.getInstance();
     if (mounted) {
       setState(() {
+        _ongoingBarEnabled =
+            _prefs?.getBool('ongoing_prayer_notification') ?? true;
         for (final prayerName in [
           'الفجر',
           'الشروق',
@@ -49,7 +54,7 @@ class _FullPrayerTimesScreenState extends ConsumerState<FullPrayerTimesScreen> {
           'المغرب',
           'العشاء'
         ]) {
-          _alerts[prayerName] = _prefs?.getBool('alert_$prayerName') ?? false;
+          _alerts[prayerName] = _prefs?.getBool('alert_$prayerName') ?? (prayerName != 'الشروق');
         }
       });
     }
@@ -66,8 +71,57 @@ class _FullPrayerTimesScreenState extends ConsumerState<FullPrayerTimesScreen> {
     final next = !current;
 
     if (next) {
-      await NotificationService.instance
+      // Check if exact alarm permission is granted on Android 12+
+      final hasExact =
+          await NotificationService.instance.hasExactAlarmPermission();
+
+      if (!hasExact && mounted) {
+        // Show dialog guiding user to grant permission
+        final goToSettings = await showDialog<bool>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: Text(
+              'تفعيل التنبيهات الدقيقة',
+              style: GoogleFonts.tajawal(fontWeight: FontWeight.w800),
+              textDirection: TextDirection.rtl,
+            ),
+            content: Text(
+              'لتشغيل أذان الصلاة في الوقت المحدد، يحتاج التطبيق إلى إذن "تنبيهات ومنبهات دقيقة".\n\nاضغط "فتح الإعدادات" ثم فعّل الإذن للتطبيق.',
+              style: GoogleFonts.tajawal(),
+              textDirection: TextDirection.rtl,
+            ),
+            actionsAlignment: MainAxisAlignment.start,
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop(false),
+                child: Text('لاحقاً', style: GoogleFonts.tajawal()),
+              ),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF1B5E20),
+                ),
+                onPressed: () => Navigator.of(ctx).pop(true),
+                child: Text(
+                  'فتح الإعدادات',
+                  style: GoogleFonts.tajawal(color: Colors.white),
+                ),
+              ),
+            ],
+          ),
+        );
+
+        if (goToSettings == true) {
+          await NotificationService.instance.requestExactAlarmPermission();
+        }
+      }
+
+      final scheduled = await NotificationService.instance
           .schedulePrayerAlert(prayerName, timeStr);
+
+      if (!scheduled && mounted) {
+        context.showSnackBar('فشل جدولة التنبيه، تحقق من الأذونات', isError: true);
+        return;
+      }
     } else {
       await NotificationService.instance.cancelPrayerAlert(prayerName);
     }
@@ -75,11 +129,8 @@ class _FullPrayerTimesScreenState extends ConsumerState<FullPrayerTimesScreen> {
     if (_prefs != null) {
       await _prefs!.setBool('alert_$prayerName', next);
     }
-    setState(() {
-      _alerts[prayerName] = next;
-    });
-
     if (mounted) {
+      setState(() => _alerts[prayerName] = next);
       final displayName = context.tr(prayerName);
       context.showSnackBar(
         next
@@ -115,10 +166,223 @@ class _FullPrayerTimesScreenState extends ConsumerState<FullPrayerTimesScreen> {
     return '$dayName، ${_now.day} $monthName ${_now.year}';
   }
 
+  void _showTestAdhanSheet(BuildContext context) {
+    final isAr = Localizations.localeOf(context).languageCode == 'ar';
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  margin: const EdgeInsets.only(bottom: 16),
+                  decoration: BoxDecoration(
+                    color: AppColors.grey300,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              Text(
+                isAr ? 'اختبار وتجربة الأذان 🕌' : 'Test Adhan & Alarms 🕌',
+                style: GoogleFonts.tajawal(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.emeraldDark,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 16),
+              ListTile(
+                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  side: const BorderSide(color: AppColors.divider),
+                ),
+                leading: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: AppColors.emeraldPale.withValues(alpha: 0.5),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(Icons.timer_outlined, color: AppColors.emerald),
+                ),
+                title: Text(
+                  isAr
+                      ? 'تجربة الأذان بعد دقيقة (مع إغلاق التطبيق وقفل الشاشة)'
+                      : 'Test in 1 Minute (App Shut Down & Locked)',
+                  style: GoogleFonts.tajawal(fontWeight: FontWeight.w700, fontSize: 14),
+                ),
+                subtitle: Text(
+                  isAr
+                      ? 'جدولة أذان بعد 60 ثانية لتجربة خروج التطبيق وقفل الشاشة'
+                      : 'Schedule in 60s to test background wakeup when app is killed',
+                  style: GoogleFonts.tajawal(fontSize: 12, color: AppColors.grey500),
+                ),
+                onTap: () async {
+                  Navigator.of(ctx).pop();
+                  final success = await NotificationService.instance.scheduleTestAdhanInOneMinute();
+                  if (context.mounted) {
+                    if (success) {
+                      showDialog(
+                        context: context,
+                        builder: (dCtx) => AlertDialog(
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                          backgroundColor: AppColors.white,
+                          title: Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  color: AppColors.emerald.withValues(alpha: 0.12),
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: const Icon(Icons.alarm_on_rounded, color: AppColors.emerald, size: 24),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Text(
+                                  isAr ? 'تمت جدولة التجربة ⏱️' : 'Alarm Scheduled ⏱️',
+                                  style: GoogleFonts.tajawal(
+                                    fontWeight: FontWeight.w800,
+                                    fontSize: 16,
+                                    color: AppColors.emeraldDark,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          content: Text(
+                            isAr
+                                ? 'تمت جدولة الأذان بعد 60 ثانية بالضبط!\n\n'
+                                  '📱 للتجربة الآن:\n'
+                                  '1. يمكنك الخروج وإغلاق التطبيق نهائياً.\n'
+                                  '2. اقفل شاشة هاتفك المحمول.\n'
+                                  '3. انتظر دقيقة وستلاحظ انطلاق صوت الأذان والإشعار.'
+                                : 'Test Adhan scheduled in exactly 60 seconds!\n\n'
+                                  '📱 To test now:\n'
+                                  '1. You can exit or kill the app completely.\n'
+                                  '2. Lock your phone screen.\n'
+                                  '3. Wait 1 minute and the phone will wake up and start the Adhan.',
+                            style: GoogleFonts.tajawal(fontSize: 14, height: 1.5),
+                          ),
+                          actions: [
+                            ElevatedButton(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: AppColors.emerald,
+                                foregroundColor: Colors.white,
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                              ),
+                              onPressed: () => Navigator.of(dCtx).pop(),
+                              child: Text(
+                                isAr ? 'حسناً، فهمت' : 'Got it',
+                                style: GoogleFonts.tajawal(fontWeight: FontWeight.w700),
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    } else {
+                      context.showSnackBar(
+                        isAr ? 'تعذر جدولة التنبيه التجريبي' : 'Failed to schedule test alarm',
+                        isError: true,
+                      );
+                    }
+                  }
+                },
+              ),
+              const SizedBox(height: 8),
+              ListTile(
+                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  side: const BorderSide(color: AppColors.divider),
+                ),
+                leading: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: AppColors.goldPale,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(Icons.volume_up_rounded, color: AppColors.gold),
+                ),
+                title: Text(
+                  context.tr('test_instant_alert'),
+                  style: GoogleFonts.tajawal(fontWeight: FontWeight.w700, fontSize: 14),
+                ),
+                subtitle: Text(
+                  isAr ? 'تشغيل صوت الأذان والإشعار فوراً' : 'Play Adhan sound & notification immediately',
+                  style: GoogleFonts.tajawal(fontSize: 12, color: AppColors.grey500),
+                ),
+                onTap: () async {
+                  Navigator.of(ctx).pop();
+                  await NotificationService.instance.showTestAdhanNotification();
+                  if (context.mounted) {
+                    context.showSnackBar(context.tr('test_adhan_sent'));
+                  }
+                },
+              ),
+              const SizedBox(height: 8),
+              ListTile(
+                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  side: const BorderSide(color: AppColors.divider),
+                ),
+                leading: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: AppColors.grey100,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(Icons.settings_suggest_rounded, color: AppColors.grey700),
+                ),
+                title: Text(
+                  context.tr('adhan_sound_settings'),
+                  style: GoogleFonts.tajawal(fontWeight: FontWeight.w700, fontSize: 14),
+                ),
+                subtitle: Text(
+                  isAr ? 'تغيير المؤذن (مكة، المدينة، أذان هادئ...)' : 'Change muazzin sound & preferences',
+                  style: GoogleFonts.tajawal(fontSize: 12, color: AppColors.grey500),
+                ),
+                onTap: () {
+                  Navigator.of(ctx).pop();
+                  context.push(AppRoutes.adhanSoundSettings);
+                },
+              ),
+              const SizedBox(height: 8),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final isGuest = ref.watch(isGuestProvider);
     final mosquesAsync = ref.watch(mosquesStreamProvider);
+    final userCity = ref.watch(userCityProvider).asData?.value;
+
+    ref.listen<AsyncValue<PrayerTimes?>>(prayerTimesProvider, (prev, next) {
+      final times = next.asData?.value;
+      if (times != null && _ongoingBarEnabled) {
+        final city = ref.read(userCityProvider).asData?.value;
+        NotificationService.instance.updateOngoingPrayerStatus(
+          times: times,
+          cityName: city,
+        );
+      }
+    });
 
     return Scaffold(
       backgroundColor: AppColors.cream,
@@ -135,29 +399,38 @@ class _FullPrayerTimesScreenState extends ConsumerState<FullPrayerTimesScreen> {
           ),
         ),
         centerTitle: true,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.volume_up_rounded, color: Colors.white),
+            tooltip: context.tr('test_adhan_tooltip'),
+            onPressed: () => _showTestAdhanSheet(context),
+          ),
+        ],
       ),
       body: Column(
         children: [
           // ── Date Header ─────────────────────────────────────────────
           Container(
             width: double.infinity,
-            padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
+            padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
             color: AppColors.emeraldDark,
             child: Column(
               children: [
                 Text(
-                  _getHijriDate(context),
+                  userCity != null && userCity.isNotEmpty
+                      ? '${_getHijriDate(context)} | $userCity'
+                      : _getHijriDate(context),
                   style: GoogleFonts.tajawal(
-                    fontSize: 18,
+                    fontSize: 16,
                     fontWeight: FontWeight.w800,
                     color: AppColors.gold,
                   ),
                 ),
-                const SizedBox(height: 4),
+                const SizedBox(height: 2),
                 Text(
                   _getGregorianDate(context),
                   style: GoogleFonts.tajawal(
-                    fontSize: 13,
+                    fontSize: 12,
                     color: AppColors.emeraldPale,
                   ),
                 ),
@@ -167,7 +440,7 @@ class _FullPrayerTimesScreenState extends ConsumerState<FullPrayerTimesScreen> {
 
           // ── Mode Selector Toggle ────────────────────────────────────
           Padding(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 6),
             child: Row(
               children: [
                 Expanded(
@@ -178,13 +451,74 @@ class _FullPrayerTimesScreenState extends ConsumerState<FullPrayerTimesScreen> {
                     onTap: () => setState(() => _selectedMode = PrayerMode.location),
                   ),
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: 10),
                 Expanded(
                   child: _ModeToggleBtn(
                     label: context.tr('by_mosque_location'),
                     icon: Icons.mosque_rounded,
                     isSelected: _selectedMode == PrayerMode.mosque,
                     onTap: () => setState(() => _selectedMode = PrayerMode.mosque),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          // ── Persistent Notification Toggle Bar ─────────────────────
+          Container(
+            margin: const EdgeInsets.fromLTRB(16, 0, 16, 6),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: AppColors.divider),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.03),
+                  blurRadius: 6,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.notifications_active_outlined,
+                    color: AppColors.emerald, size: 18),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        context.tr('ongoing_prayer_bar'),
+                        style: GoogleFonts.tajawal(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.charcoal,
+                        ),
+                      ),
+                      Text(
+                        context.tr('ongoing_prayer_bar_desc'),
+                        style: GoogleFonts.tajawal(
+                          fontSize: 10,
+                          color: AppColors.grey500,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Transform.scale(
+                  scale: 0.85,
+                  child: Switch.adaptive(
+                    value: _ongoingBarEnabled,
+                    activeTrackColor: AppColors.emerald,
+                    onChanged: (val) async {
+                      setState(() => _ongoingBarEnabled = val);
+                      final times = ref.read(prayerTimesProvider).asData?.value;
+                      final city = ref.read(userCityProvider).asData?.value;
+                      await NotificationService.instance
+                          .setOngoingPrayerStatusEnabled(val, times, city);
+                    },
                   ),
                 ),
               ],
@@ -450,13 +784,13 @@ class _ModeToggleBtn extends StatelessWidget {
   Widget build(BuildContext context) {
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(12),
+      borderRadius: BorderRadius.circular(10),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
         decoration: BoxDecoration(
           color: isSelected ? AppColors.emerald : AppColors.white,
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(10),
           border: Border.all(
             color: isSelected ? AppColors.emerald : AppColors.divider,
           ),
@@ -464,8 +798,8 @@ class _ModeToggleBtn extends StatelessWidget {
               ? [
                   BoxShadow(
                     color: AppColors.emerald.withValues(alpha: 0.25),
-                    blurRadius: 8,
-                    offset: const Offset(0, 4),
+                    blurRadius: 6,
+                    offset: const Offset(0, 2),
                   ),
                 ]
               : [],
@@ -475,14 +809,14 @@ class _ModeToggleBtn extends StatelessWidget {
           children: [
             Icon(
               icon,
-              size: 18,
+              size: 16,
               color: isSelected ? Colors.white : AppColors.grey700,
             ),
-            const SizedBox(width: 8),
+            const SizedBox(width: 6),
             Text(
               label,
               style: GoogleFonts.tajawal(
-                fontSize: 14,
+                fontSize: 13,
                 fontWeight: FontWeight.w700,
                 color: isSelected ? Colors.white : AppColors.grey700,
               ),
@@ -514,31 +848,31 @@ class _PrayerCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+      margin: const EdgeInsets.only(bottom: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
       decoration: BoxDecoration(
         color: isNext
             ? AppColors.emeraldDark
             : isPast
                 ? AppColors.grey100
                 : AppColors.white,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(
           color: isNext ? AppColors.emeraldMedium : AppColors.divider,
         ),
         boxShadow: isNext
             ? [
                 BoxShadow(
-                  color: AppColors.emeraldDark.withValues(alpha: 0.3),
-                  blurRadius: 12,
-                  offset: const Offset(0, 6),
+                  color: AppColors.emeraldDark.withValues(alpha: 0.25),
+                  blurRadius: 8,
+                  offset: const Offset(0, 3),
                 ),
               ]
             : [
                 BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.03),
-                  blurRadius: 8,
-                  offset: const Offset(0, 2),
+                  color: Colors.black.withValues(alpha: 0.02),
+                  blurRadius: 4,
+                  offset: const Offset(0, 1),
                 ),
               ],
       ),
@@ -546,6 +880,9 @@ class _PrayerCard extends StatelessWidget {
         children: [
           // Bell Toggle (on the left)
           IconButton(
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+            iconSize: 19,
             icon: Icon(
               alertActive ? Icons.notifications_active_rounded : Icons.notifications_none_rounded,
               color: isNext
@@ -562,10 +899,29 @@ class _PrayerCard extends StatelessWidget {
           Row(
             mainAxisSize: MainAxisSize.min,
             children: [
+              if (isNext) ...[
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: AppColors.gold.withValues(alpha: 0.2),
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(color: AppColors.gold, width: 0.8),
+                  ),
+                  child: Text(
+                    'الصلاة القادمة',
+                    style: GoogleFonts.tajawal(
+                      fontSize: 9,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.goldLight,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+              ],
               Text(
                 time,
                 style: GoogleFonts.tajawal(
-                  fontSize: 20,
+                  fontSize: 16,
                   fontWeight: FontWeight.w800,
                   color: isNext
                       ? AppColors.gold
@@ -575,11 +931,11 @@ class _PrayerCard extends StatelessWidget {
                   letterSpacing: 0.5,
                 ),
               ),
-              const SizedBox(width: 16),
+              const SizedBox(width: 14),
               Text(
                 context.tr(name),
                 style: GoogleFonts.tajawal(
-                  fontSize: 16,
+                  fontSize: 14,
                   fontWeight: isNext ? FontWeight.w800 : FontWeight.w600,
                   color: isNext
                       ? Colors.white

@@ -19,11 +19,18 @@ class PostRepository {
   /// Watches all posts in descending order of creation.
   /// Optionally filtered by category.
   Stream<List<PostModel>> watchPosts({String? category}) {
-    Query<Map<String, dynamic>> query = _posts.orderBy('createdAt', descending: true);
     if (category != null && category != 'الكل' && category != 'قريب مني') {
-      query = query.where('category', isEqualTo: category);
+      return _posts
+          .where('category', isEqualTo: category)
+          .snapshots()
+          .map((snap) {
+        final list =
+            snap.docs.map((doc) => PostModel.fromFirestore(doc)).toList();
+        list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+        return list;
+      });
     }
-    return query.snapshots().map((snap) {
+    return _posts.orderBy('createdAt', descending: true).snapshots().map((snap) {
       return snap.docs.map((doc) => PostModel.fromFirestore(doc)).toList();
     });
   }
@@ -291,15 +298,169 @@ class PostRepository {
     debugPrint('[PostRepository] Seeded mock community posts');
   }
 
+  /// Fetches a paginated batch of posts using Firestore cursors.
+  Future<PaginatedPostsResult> fetchPostsPaginated({
+    String? category,
+    DocumentSnapshot<Map<String, dynamic>>? startAfterDoc,
+    int pageSize = 15,
+  }) async {
+    Query<Map<String, dynamic>> query = _posts.orderBy('createdAt', descending: true);
+    if (category != null &&
+        category != 'all' &&
+        category != 'الكل' &&
+        category != 'nearby' &&
+        category != 'قريب مني') {
+      final dbCat = {
+        'lessons': 'دروس',
+        'announcements': 'إعلانات',
+        'activities': 'أنشطة',
+      }[category] ?? category;
+      query = query.where('category', isEqualTo: dbCat);
+    }
+    if (startAfterDoc != null) {
+      query = query.startAfterDocument(startAfterDoc);
+    }
+    query = query.limit(pageSize);
+
+    final snap = await query.get();
+    final posts = snap.docs.map((doc) => PostModel.fromFirestore(doc)).toList();
+    final lastDoc = snap.docs.isNotEmpty ? snap.docs.last : null;
+    final hasMore = snap.docs.length >= pageSize;
+
+    return PaginatedPostsResult(
+      posts: posts,
+      lastDocument: lastDoc,
+      hasMore: hasMore,
+    );
+  }
+
   /// Watches all posts published by a specific mosque.
   Stream<List<PostModel>> watchMosquePosts(String mosqueId) {
     return _posts
         .where('mosqueId', isEqualTo: mosqueId)
-        .orderBy('createdAt', descending: true)
         .snapshots()
-        .map((snap) => snap.docs.map((doc) => PostModel.fromFirestore(doc)).toList());
+        .map((snap) {
+      final list =
+          snap.docs.map((doc) => PostModel.fromFirestore(doc)).toList();
+      list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      return list;
+    });
   }
 }
+
+// ── Paginated Models & Notifier ───────────────────────────────────────────────
+
+class PaginatedPostsResult {
+  final List<PostModel> posts;
+  final DocumentSnapshot<Map<String, dynamic>>? lastDocument;
+  final bool hasMore;
+
+  const PaginatedPostsResult({
+    required this.posts,
+    this.lastDocument,
+    required this.hasMore,
+  });
+}
+
+class PaginatedPostsState {
+  final List<PostModel> posts;
+  final bool isLoading;
+  final bool isLoadingMore;
+  final bool hasMore;
+  final Object? error;
+  final DocumentSnapshot<Map<String, dynamic>>? lastDocument;
+
+  const PaginatedPostsState({
+    this.posts = const [],
+    this.isLoading = false,
+    this.isLoadingMore = false,
+    this.hasMore = true,
+    this.error,
+    this.lastDocument,
+  });
+
+  PaginatedPostsState copyWith({
+    List<PostModel>? posts,
+    bool? isLoading,
+    bool? isLoadingMore,
+    bool? hasMore,
+    Object? error,
+    DocumentSnapshot<Map<String, dynamic>>? lastDocument,
+  }) {
+    return PaginatedPostsState(
+      posts: posts ?? this.posts,
+      isLoading: isLoading ?? this.isLoading,
+      isLoadingMore: isLoadingMore ?? this.isLoadingMore,
+      hasMore: hasMore ?? this.hasMore,
+      error: error,
+      lastDocument: lastDocument ?? this.lastDocument,
+    );
+  }
+}
+
+class PaginatedPostsNotifier extends Notifier<PaginatedPostsState> {
+  String? _category;
+
+  @override
+  PaginatedPostsState build() {
+    Future.microtask(() => fetchInitial());
+    return const PaginatedPostsState(isLoading: true);
+  }
+
+  void setCategory(String? category) {
+    if (_category != category) {
+      _category = category;
+      fetchInitial();
+    }
+  }
+
+  Future<void> fetchInitial() async {
+    state = state.copyWith(isLoading: true, error: null);
+    try {
+      final repo = ref.read(postRepositoryProvider);
+      final result = await repo.fetchPostsPaginated(category: _category);
+      state = PaginatedPostsState(
+        posts: result.posts,
+        lastDocument: result.lastDocument,
+        hasMore: result.hasMore,
+        isLoading: false,
+        isLoadingMore: false,
+      );
+    } catch (e) {
+      state = state.copyWith(isLoading: false, error: e);
+    }
+  }
+
+  Future<void> fetchNextPage() async {
+    if (state.isLoading || state.isLoadingMore || !state.hasMore) return;
+
+    state = state.copyWith(isLoadingMore: true);
+    try {
+      final repo = ref.read(postRepositoryProvider);
+      final result = await repo.fetchPostsPaginated(
+        category: _category,
+        startAfterDoc: state.lastDocument,
+      );
+      state = state.copyWith(
+        posts: [...state.posts, ...result.posts],
+        lastDocument: result.lastDocument,
+        hasMore: result.hasMore,
+        isLoadingMore: false,
+      );
+    } catch (e) {
+      state = state.copyWith(isLoadingMore: false, error: e);
+    }
+  }
+
+  Future<void> refresh() async {
+    return fetchInitial();
+  }
+}
+
+final paginatedPostsNotifierProvider =
+    NotifierProvider<PaginatedPostsNotifier, PaginatedPostsState>(
+  PaginatedPostsNotifier.new,
+);
 
 // ── Providers ─────────────────────────────────────────────────────────────────
 

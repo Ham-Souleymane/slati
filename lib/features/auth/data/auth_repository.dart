@@ -139,7 +139,24 @@ class AuthRepository implements IAuthRepository {
   // ── Apple Sign-In ────────────────────────────────────────────
   @override
   Future<UserCredential?> signInWithApple() async {
-    // Guard: Sign in with Apple may be unavailable (e.g. iCloud not signed in).
+    // 1. Try native Firebase Apple Provider first on iOS
+    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.iOS) {
+      try {
+        final appleProvider = AppleAuthProvider();
+        appleProvider.addScope('email');
+        appleProvider.addScope('name');
+        return await _auth.signInWithProvider(appleProvider);
+      } on FirebaseAuthException catch (e) {
+        if (e.code == 'canceled' || e.code == 'web-context-cancelled') {
+          return null;
+        }
+        debugPrint('[AppleSignIn] Native signInWithProvider failed (${e.code}), trying plugin fallback...');
+      } catch (e) {
+        debugPrint('[AppleSignIn] Native signInWithProvider error: $e, trying plugin fallback...');
+      }
+    }
+
+    // 2. Guard for plugin fallback / Android / Web
     final available = await SignInWithApple.isAvailable();
     if (!available) {
       throw FirebaseAuthException(
@@ -184,7 +201,7 @@ class AuthRepository implements IAuthRepository {
         rawNonce: rawNonce,
       );
 
-      return _auth.signInWithCredential(credential);
+      return await _auth.signInWithCredential(credential);
     } on SignInWithAppleAuthorizationException catch (e) {
       debugPrint('[AppleSignIn] Authorization exception: code=${e.code}, message=${e.message}');
       if (e.code == AuthorizationErrorCode.canceled) {
@@ -282,7 +299,33 @@ class AuthRepository implements IAuthRepository {
 
   @override
   Future<UserCredential?> linkAnonymousWithAppleCredential() async {
-    // Guard: Sign in with Apple may be unavailable (e.g. iCloud not signed in).
+    final current = _auth.currentUser;
+    if (current == null || !current.isAnonymous) {
+      return signInWithApple();
+    }
+
+    // 1. Try native Firebase Apple Provider link on iOS
+    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.iOS) {
+      try {
+        final appleProvider = AppleAuthProvider();
+        appleProvider.addScope('email');
+        appleProvider.addScope('name');
+        return await current.linkWithProvider(appleProvider);
+      } on FirebaseAuthException catch (e) {
+        if (e.code == 'canceled' || e.code == 'web-context-cancelled') {
+          return null;
+        }
+        if (e.code == 'credential-already-in-use' ||
+            e.code == 'provider-already-linked') {
+          return signInWithApple();
+        }
+        debugPrint('[AppleSignIn] Native linkWithProvider failed (${e.code}), trying plugin fallback...');
+      } catch (e) {
+        debugPrint('[AppleSignIn] Native linkWithProvider error: $e, trying plugin fallback...');
+      }
+    }
+
+    // 2. Fallback using SignInWithApple plugin
     final available = await SignInWithApple.isAvailable();
     if (!available) {
       throw FirebaseAuthException(
@@ -327,19 +370,15 @@ class AuthRepository implements IAuthRepository {
         rawNonce: rawNonce,
       );
 
-      final current = _auth.currentUser;
-      if (current != null && current.isAnonymous) {
-        try {
-          return await current.linkWithCredential(credential);
-        } on FirebaseAuthException catch (e) {
-          if (e.code == 'credential-already-in-use' ||
-              e.code == 'provider-already-linked') {
-            return _auth.signInWithCredential(credential);
-          }
-          rethrow;
+      try {
+        return await current.linkWithCredential(credential);
+      } on FirebaseAuthException catch (e) {
+        if (e.code == 'credential-already-in-use' ||
+            e.code == 'provider-already-linked') {
+          return await _auth.signInWithCredential(credential);
         }
+        rethrow;
       }
-      return _auth.signInWithCredential(credential);
     } on SignInWithAppleAuthorizationException catch (e) {
       debugPrint('[AppleSignIn] Authorization exception: code=${e.code}, message=${e.message}');
       if (e.code == AuthorizationErrorCode.canceled) {

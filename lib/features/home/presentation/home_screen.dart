@@ -1,18 +1,24 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/localization/app_localizations.dart';
 import '../../../core/providers/firebase_providers.dart';
-import '../../../core/router/app_router.dart';
 import '../../../core/services/location_service.dart';
+import '../../../core/services/notification_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/extensions.dart';
 import '../../auth/application/auth_controller.dart';
-import '../../prayer_times/data/prayer_method_mapper.dart';
+import '../../mosques/data/mosque_repository.dart';
+import '../../posts/data/post_repository.dart';
+import '../../posts/domain/post_model.dart';
+import '../../posts/presentation/feed_screen.dart';
 import '../../prayer_times/data/prayer_service.dart';
 import '../../prayer_times/domain/prayer_times_model.dart';
 
@@ -25,9 +31,6 @@ class HomeScreen extends ConsumerStatefulWidget {
 
 class _HomeScreenState extends ConsumerState<HomeScreen>
     with TickerProviderStateMixin {
-  Timer? _countdownTimer;
-  DateTime _now = DateTime.now();
-
   // Animations
   late AnimationController _heroController;
   late Animation<double> _heroFade;
@@ -50,17 +53,101 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
 
     _heroController.forward();
 
-    // Tick every second to update countdown
-    _countdownTimer = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (mounted) setState(() => _now = DateTime.now());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _seedIfNeeded();
+        _checkPermissionsPrompt();
+      }
     });
+  }
+
+  Future<void> _checkPermissionsPrompt() async {
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return;
+
+    try {
+      final sp = await SharedPreferences.getInstance();
+      final hasChecked = sp.getBool('has_prompted_exact_alarm') ?? false;
+      if (hasChecked) return;
+
+      final hasExact = await NotificationService.instance.hasExactAlarmPermission();
+      if (!hasExact && mounted) {
+        await sp.setBool('has_prompted_exact_alarm', true);
+        // Capture context before async gap
+        if (!mounted) return;
+        final localContext = context;
+        final isAr = Localizations.localeOf(localContext).languageCode == 'ar';
+        final shouldOpen = await showDialog<bool>(
+          context: localContext,
+          builder: (ctx) => AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            title: Text(
+              isAr ? 'تفعيل تنبيهات الأذان في موعدها ⏰' : 'Enable Accurate Prayer Alarms ⏰',
+              style: GoogleFonts.tajawal(fontWeight: FontWeight.w800, color: AppColors.emeraldDark),
+            ),
+            content: Text(
+              isAr
+                  ? 'لضمان انطلاق صوت الأذان بدقة عند دخول وقت الصلاة حتى عندما تكون الشاشة مغلقة أو التطبيق مغلقاً، يرجى تفعيل إذن "المنبهات والتذكيرات".'
+                  : 'To ensure the Adhan rings accurately when prayer time arrives even when the screen is locked, please enable "Alarms & Reminders" permission.',
+              style: GoogleFonts.tajawal(fontSize: 14, height: 1.4),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop(false),
+                child: Text(isAr ? 'لاحقاً' : 'Later', style: GoogleFonts.tajawal(color: AppColors.grey700)),
+              ),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.emerald,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+                onPressed: () => Navigator.of(ctx).pop(true),
+                child: Text(isAr ? 'تفعيل الآن' : 'Enable Now', style: GoogleFonts.tajawal(fontWeight: FontWeight.w700)),
+              ),
+            ],
+          ),
+        );
+
+        if (shouldOpen == true) {
+          await NotificationService.instance.requestExactAlarmPermission();
+        }
+      }
+    } catch (e) {
+      debugPrint('[HomeScreen] Permission prompt error: $e');
+    }
+  }
+
+  Future<void> _seedIfNeeded() async {
+    final loc = ref.read(userLocationProvider);
+    if (loc == null) return;
+    await ref.read(postRepositoryProvider).seedMockPostsIfEmpty(
+          loc.latitude,
+          loc.longitude,
+        );
   }
 
   @override
   void dispose() {
-    _countdownTimer?.cancel();
     _heroController.dispose();
     super.dispose();
+  }
+
+  Future<void> _toggleSave(
+      PostModel post, bool isSaved, bool isGuest) async {
+    if (isGuest) {
+      context.showGuestUpgradeSheet();
+      return;
+    }
+    final uid = ref.read(authStateChangesProvider).asData?.value?.uid;
+    if (uid == null) return;
+    final repo = ref.read(postRepositoryProvider);
+    if (isSaved) {
+      await repo.unsavePost(uid, post.id);
+      if (mounted) context.showSnackBar(context.tr('unsave_post_success'));
+    } else {
+      await repo.savePost(uid, post);
+      if (mounted) context.showSnackBar(context.tr('save_post_success'));
+    }
   }
 
   @override
@@ -68,98 +155,316 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     final isGuest = ref.watch(isGuestProvider);
     final userLocation = ref.watch(userLocationProvider);
     final prayerTimesAsync = ref.watch(prayerTimesProvider);
-    final methodAsync = ref.watch(activePrayerMethodProvider);
+    final savedIdsAsync = ref.watch(savedPostIdsProvider);
+    final savedIds = savedIdsAsync.asData?.value ?? {};
+    final followedMosquesAsync = ref.watch(followedMosquesProvider);
+    final followedMosqueIds =
+        (followedMosquesAsync.asData?.value ?? []).map((m) => m.id).toSet();
+    final paginatedPostsState = ref.watch(paginatedPostsNotifierProvider);
+
+    ref.listen<AsyncValue<PrayerTimes?>>(prayerTimesProvider, (prev, next) {
+      final times = next.asData?.value;
+      if (times != null) {
+        NotificationService.instance.syncPrayerAlerts(times);
+        final city = ref.read(userCityProvider).asData?.value;
+        NotificationService.instance.updateOngoingPrayerStatus(
+          times: times,
+          cityName: city,
+        );
+      }
+    });
+
+    final cachedTimes = prayerTimesAsync.asData?.value;
+    if (cachedTimes != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        NotificationService.instance.syncPrayerAlerts(cachedTimes);
+        final city = ref.read(userCityProvider).asData?.value;
+        NotificationService.instance.updateOngoingPrayerStatus(
+          times: cachedTimes,
+          cityName: city,
+        );
+      });
+    }
+
+    ref.listen<AsyncValue<String?>>(userCityProvider, (prev, next) {
+      final city = next.asData?.value;
+      final times = ref.read(prayerTimesProvider).asData?.value;
+      if (times != null && city != null) {
+        NotificationService.instance.updateOngoingPrayerStatus(
+          times: times,
+          cityName: city,
+        );
+      }
+    });
 
     return Scaffold(
       backgroundColor: AppColors.cream,
       extendBody: true,
-      body: CustomScrollView(
-        slivers: [
-          // ── Top App Bar ─────────────────────────────────────────
-          _HomeAppBar(
-            locationName: userLocation?.name ?? '',
-            isGuest: isGuest,
-          ),
+      body: NotificationListener<ScrollNotification>(
+        onNotification: (scrollInfo) {
+          if (scrollInfo.metrics.pixels >=
+              scrollInfo.metrics.maxScrollExtent - 300) {
+            ref.read(paginatedPostsNotifierProvider.notifier).fetchNextPage();
+          }
+          return false;
+        },
+        child: RefreshIndicator(
+          color: AppColors.emerald,
+          onRefresh: () async {
+            ref.invalidate(prayerTimesProvider);
+            await ref.read(paginatedPostsNotifierProvider.notifier).refresh();
+          },
+          child: CustomScrollView(
+            physics: const AlwaysScrollableScrollPhysics(
+              parent: BouncingScrollPhysics(),
+            ),
+            slivers: [
+              // ── Top App Bar ─────────────────────────────────────────
+              _HomeAppBar(
+                locationName: userLocation?.name ?? '',
+                isGuest: isGuest,
+              ),
 
-          // ── Content ─────────────────────────────────────────────
-          SliverPadding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-            sliver: SliverList(
-              delegate: SliverChildListDelegate([
-                const SizedBox(height: 16),
+              // ── Content ─────────────────────────────────────────────
+              // ── Top Header Section ──────────────────────────────────
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+                sliver: SliverList(
+                  delegate: SliverChildListDelegate([
+                    // ── Hero Next Prayer Card ────────────────────────
+                    prayerTimesAsync.when(
+                      loading: () => _NextPrayerCardSkeleton(),
+                      error: (e, _) => _ErrorCard(
+                        onRetry: () => ref.invalidate(prayerTimesProvider),
+                      ),
+                      data: (times) => times == null
+                          ? _ErrorCard(
+                              onRetry: () => ref.invalidate(prayerTimesProvider),
+                            )
+                          : FadeTransition(
+                              opacity: _heroFade,
+                              child: SlideTransition(
+                                position: _heroSlide,
+                                child: _NextPrayerHeroCard(
+                                  times: times,
+                                ),
+                              ),
+                            ),
+                    ),
 
-                // ── Hero Next Prayer Card ────────────────────────
-                prayerTimesAsync.when(
-                  loading: () => _NextPrayerCardSkeleton(),
-                  error: (e, _) => _ErrorCard(onRetry: () => ref.invalidate(prayerTimesProvider)),
-                  data: (times) => times == null
-                      ? _ErrorCard(onRetry: () => ref.invalidate(prayerTimesProvider))
-                      : FadeTransition(
-                          opacity: _heroFade,
-                          child: SlideTransition(
-                            position: _heroSlide,
-                            child: _NextPrayerHeroCard(
-                              times: times,
-                              now: _now,
+                    const SizedBox(height: 16),
+
+                    // ── Followed Posts Navigation Banner ──────────────
+                    GestureDetector(
+                      onTap: () => context.go('/feed?tab=followed'),
+                      child: Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 14),
+                        decoration: BoxDecoration(
+                          color: AppColors.white,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: AppColors.divider),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.04),
+                              blurRadius: 10,
+                              offset: const Offset(0, 3),
+                            ),
+                          ],
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(10),
+                              decoration: BoxDecoration(
+                                color: AppColors.gold.withValues(alpha: 0.12),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: const Icon(
+                                Icons.dynamic_feed_rounded,
+                                color: AppColors.gold,
+                                size: 24,
+                              ),
+                            ),
+                            const SizedBox(width: 14),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'منشورات المساجد المتابعة',
+                                    style: GoogleFonts.tajawal(
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.w800,
+                                      color: AppColors.charcoal,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    'عرض أحدث منشورات وإعلانات المساجد التي تتابعها',
+                                    style: GoogleFonts.tajawal(
+                                      fontSize: 12,
+                                      color: AppColors.grey500,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const Icon(
+                              Icons.arrow_forward_ios_rounded,
+                              size: 16,
+                              color: AppColors.grey300,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+
+                    const SizedBox(height: 16),
+
+                    // ── WhatsApp Channel Banner ──────────────────────
+                    _WhatsAppChannelBanner(),
+
+                    const SizedBox(height: 16),
+
+                    // ── Guest upgrade banner ─────────────────────────
+                    if (isGuest) ...[
+                      _GuestUpgradeBanner(),
+                      const SizedBox(height: 16),
+                    ],
+                  ]),
+                ),
+              ),
+
+              // ── Posts Paginated Feed List ──────────────────────────
+              if (paginatedPostsState.isLoading && paginatedPostsState.posts.isEmpty)
+                SliverPadding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  sliver: SliverList(
+                    delegate: SliverChildBuilderDelegate(
+                      (context, index) => Padding(
+                        padding: const EdgeInsets.only(bottom: 14),
+                        child: _Shimmer(
+                          child: Container(
+                            height: 180,
+                            decoration: BoxDecoration(
+                              color: AppColors.grey100,
+                              borderRadius: BorderRadius.circular(16),
                             ),
                           ),
                         ),
-                ),
-
-                const SizedBox(height: 20),
-
-                // ── Today's Prayer Times Grid ────────────────────
-                prayerTimesAsync.when(
-                  loading: () => _PrayerGridSkeleton(),
-                  error: (_, __) => const SizedBox.shrink(),
-                  data: (times) => times == null
-                      ? const SizedBox.shrink()
-                      : _TodayPrayerGrid(times: times, now: _now),
-                ),
-
-                const SizedBox(height: 20),
-
-                // ── Calculation Method Badge ─────────────────────
-                methodAsync.when(
-                  loading: () => const SizedBox.shrink(),
-                  error: (_, __) => const SizedBox.shrink(),
-                  data: (id) => _MethodBadge(
-                    methodId: id,
-                    onTap: () => _showMethodPicker(context),
+                      ),
+                      childCount: 3,
+                    ),
                   ),
-                ),
+                )
+              else if (paginatedPostsState.error != null && paginatedPostsState.posts.isEmpty)
+                SliverToBoxAdapter(
+                  child: Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(24),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            context.tr('feed_load_posts_failed'),
+                            style: GoogleFonts.tajawal(
+                              color: AppColors.grey700,
+                              fontSize: 16,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            paginatedPostsState.error.toString(),
+                            style: GoogleFonts.tajawal(
+                              color: AppColors.grey500,
+                              fontSize: 11,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                )
+              else () {
+                final posts = paginatedPostsState.posts;
+                if (posts.isEmpty) {
+                  return SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 40),
+                      child: Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const Icon(Icons.article_outlined,
+                                size: 56, color: AppColors.grey300),
+                            const SizedBox(height: 12),
+                            Text(
+                              context.tr('feed_empty_posts'),
+                              style: GoogleFonts.tajawal(
+                                fontSize: 15,
+                                color: AppColors.grey500,
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  );
+                }
 
-                const SizedBox(height: 20),
+                final itemCount = posts.length + (paginatedPostsState.isLoadingMore ? 1 : 0);
+                return SliverPadding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 100),
+                  sliver: SliverList.builder(
+                    itemCount: itemCount,
+                    itemBuilder: (context, index) {
+                      if (index >= posts.length) {
+                        return const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 20),
+                          child: Center(
+                            child: SizedBox(
+                              width: 24,
+                              height: 24,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2.5,
+                                color: AppColors.emerald,
+                              ),
+                            ),
+                          ),
+                        );
+                      }
 
-                // ── Guest upgrade banner ─────────────────────────
-                if (isGuest) _GuestUpgradeBanner(),
-
-                // ── Nav bar spacer ───────────────────────────────
-                const SizedBox(height: 100),
-              ]),
-            ),
+                      final post = posts[index];
+                      final isSaved = savedIds.contains(post.id);
+                      final isFollowing = followedMosqueIds.contains(post.mosqueId);
+                      return RepaintBoundary(
+                        child: PostCard(
+                          key: ValueKey(post.id),
+                          post: post,
+                          isSaved: isSaved,
+                          isGuest: isGuest,
+                          isFollowing: isFollowing,
+                          onSave: () => _toggleSave(post, isSaved, isGuest),
+                          onTap: () => context.push(
+                            '/post/${post.id}',
+                            extra: post,
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                );
+              }(),
+            ],
           ),
-        ],
+        ),
       ),
     );
-  }
-
-  // ── Method picker sheet ──────────────────────────────────────
-  void _showMethodPicker(BuildContext context) {
-    final override = ref.read(prayerMethodOverrideProvider);
-    showModalBottomSheet<int?>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) => _MethodPickerSheet(currentMethodId: override),
-    ).then((selected) {
-      if (selected != null) {
-        ref
-            .read(prayerMethodOverrideProvider.notifier)
-            .setMethod(selected == 0 ? null : selected);
-        ref.invalidate(prayerTimesProvider);
-      }
-    });
   }
 }
 
@@ -175,7 +480,6 @@ class _HomeAppBar extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return SliverAppBar(
-      expandedHeight: 0,
       floating: true,
       pinned: true,
       elevation: 0,
@@ -200,7 +504,6 @@ class _HomeAppBar extends ConsumerWidget {
               color: AppColors.gold,
             ),
           ),
-
           if (locationName.isNotEmpty)
             Row(
               mainAxisSize: MainAxisSize.min,
@@ -226,11 +529,11 @@ class _HomeAppBar extends ConsumerWidget {
         ],
       ),
       actions: [
-        // Notification bell
         IconButton(
           icon: Stack(
             children: [
-              const Icon(Icons.notifications_outlined, color: AppColors.goldLight),
+              const Icon(Icons.notifications_outlined,
+                  color: AppColors.goldLight),
               Positioned(
                 right: 0,
                 top: 0,
@@ -245,14 +548,15 @@ class _HomeAppBar extends ConsumerWidget {
               ),
             ],
           ),
-          onPressed: () {}, // placeholder
-          tooltip: AppLocalizations.of(context)?.translate('notifications') ?? 'Notifications',
+          onPressed: () {},
+          tooltip: AppLocalizations.of(context)?.translate('notifications') ??
+              'Notifications',
         ),
-        // Sign out
         IconButton(
           icon: const Icon(Icons.logout_rounded, color: AppColors.goldLight),
           onPressed: () => ref.read(authControllerProvider.notifier).signOut(),
-          tooltip: AppLocalizations.of(context)?.translate('sign_out') ?? 'Sign Out',
+          tooltip: AppLocalizations.of(context)?.translate('sign_out') ??
+              'Sign Out',
         ),
         const SizedBox(width: 4),
       ],
@@ -264,25 +568,67 @@ class _HomeAppBar extends ConsumerWidget {
 // Hero "Next Prayer" Card
 // ─────────────────────────────────────────────────────────────────────────────
 
-class _NextPrayerHeroCard extends StatelessWidget {
-  const _NextPrayerHeroCard({required this.times, required this.now});
+class _NextPrayerHeroCard extends StatefulWidget {
+  const _NextPrayerHeroCard({required this.times});
   final PrayerTimes times;
-  final DateTime now;
+
+  @override
+  State<_NextPrayerHeroCard> createState() => _NextPrayerHeroCardState();
+}
+
+class _NextPrayerHeroCardState extends State<_NextPrayerHeroCard> {
+  Timer? _countdownTimer;
+  DateTime _now = DateTime.now();
+
+  @override
+  void initState() {
+    super.initState();
+    _countdownTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted) setState(() => _now = DateTime.now());
+    });
+  }
+
+  @override
+  void dispose() {
+    _countdownTimer?.cancel();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    final next = times.nextPrayer(now);
-    final remaining = next != null ? times.timeUntilNextPrayer(now) : null;
+    final next = widget.times.nextPrayer(_now);
+    Duration? remaining;
+    String prayerName;
+    String prayerTime;
 
-    final prayerName = next?.key ?? 'الفجر';
-    final prayerTime = next?.value ?? times.fajr;
+    if (next != null) {
+      remaining = widget.times.timeUntilNextPrayer(_now);
+      prayerName = next.key;
+      prayerTime = next.value;
+    } else {
+      // If today's prayers are over, count down to tomorrow's Fajr
+      final tomorrowFajr = NotificationService.parseTimeToDateTime(
+        widget.times.fajr,
+        _now.add(const Duration(days: 1)),
+      );
+      if (tomorrowFajr != null) {
+        remaining = tomorrowFajr.difference(_now);
+      }
+      prayerName = 'الفجر';
+      prayerTime = widget.times.fajr;
+    }
+
     final icon = _iconForPrayer(prayerName);
 
     return Container(
       width: double.infinity,
       decoration: BoxDecoration(
         gradient: const LinearGradient(
-          colors: [AppColors.emeraldDark, Color(0xFF065F46), Color(0xFF047857)],
+          colors: [
+            AppColors.emeraldDark,
+            Color(0xFF065F46),
+            Color(0xFF047857)
+          ],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
@@ -324,7 +670,7 @@ class _NextPrayerHeroCard extends StatelessWidget {
           ),
           // Content
           Padding(
-            padding: const EdgeInsets.all(24),
+            padding: const EdgeInsets.all(20),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -344,11 +690,14 @@ class _NextPrayerHeroCard extends StatelessWidget {
                       children: [
                         Text(
                           next != null
-                              ? AppLocalizations.of(context)?.translate('next_prayer') ?? 'Next Prayer'
-                              : AppLocalizations.of(context)?.translate('prayers_ended') ?? 'Prayers ended',
+                              ? AppLocalizations.of(context)
+                                      ?.translate('next_prayer') ??
+                                  'Next Prayer'
+                              : 'الصلاة القادمة (غداً)',
                           style: GoogleFonts.tajawal(
                             fontSize: 13,
-                            color: AppColors.emeraldPale.withValues(alpha: 0.8),
+                            color:
+                                AppColors.emeraldPale.withValues(alpha: 0.8),
                             fontWeight: FontWeight.w500,
                           ),
                           textDirection: TextDirection.rtl,
@@ -356,7 +705,7 @@ class _NextPrayerHeroCard extends StatelessWidget {
                         Text(
                           context.tr(prayerName),
                           style: GoogleFonts.tajawal(
-                            fontSize: 26,
+                            fontSize: 24,
                             fontWeight: FontWeight.w800,
                             color: Colors.white,
                           ),
@@ -364,12 +713,11 @@ class _NextPrayerHeroCard extends StatelessWidget {
                         ),
                       ],
                     ),
-
                     const Spacer(),
                     Text(
                       prayerTime,
                       style: GoogleFonts.tajawal(
-                        fontSize: 30,
+                        fontSize: 28,
                         fontWeight: FontWeight.w900,
                         color: AppColors.gold,
                         letterSpacing: 1.5,
@@ -377,34 +725,75 @@ class _NextPrayerHeroCard extends StatelessWidget {
                     ),
                   ],
                 ),
-
-                if (remaining != null) ...[
-                  const SizedBox(height: 20),
-                  // Countdown bar
+                if (remaining != null && !remaining.isNegative) ...[
+                  const SizedBox(height: 16),
+                  // Big & Prominent Countdown Box
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 14),
                     decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.08),
-                      borderRadius: BorderRadius.circular(14),
+                      color: Colors.black.withValues(alpha: 0.28),
+                      borderRadius: BorderRadius.circular(16),
                       border: Border.all(
-                        color: Colors.white.withValues(alpha: 0.12),
+                        color: AppColors.gold.withValues(alpha: 0.35),
+                        width: 1.2,
                       ),
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const Icon(
-                          Icons.timer_outlined,
-                          color: AppColors.goldLight,
-                          size: 18,
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.15),
+                          blurRadius: 8,
+                          offset: const Offset(0, 3),
                         ),
-                        const SizedBox(width: 8),
-                        Text(
-                          '${AppLocalizations.of(context)?.translate('remaining_time') ?? 'Remaining: '}${_formatDuration(remaining)}',
-                          style: GoogleFonts.tajawal(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.white,
+                      ],
+                    ),
+                    child: Column(
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const Icon(
+                              Icons.timer_outlined,
+                              color: AppColors.goldLight,
+                              size: 16,
+                            ),
+                            const SizedBox(width: 6),
+                            Text(
+                              'الوقت المتبقي للأذان',
+                              style: GoogleFonts.tajawal(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.emeraldPale,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 10),
+                        // Hours : Minutes : Seconds large blocks (Left to Right)
+                        Directionality(
+                          textDirection: TextDirection.ltr,
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              _buildCountdownUnit(
+                                value: remaining.inHours.toString().padLeft(2, '0'),
+                                label: 'ساعة',
+                              ),
+                              _buildCountdownColon(),
+                              _buildCountdownUnit(
+                                value: (remaining.inMinutes % 60)
+                                    .toString()
+                                    .padLeft(2, '0'),
+                                label: 'دقيقة',
+                              ),
+                              _buildCountdownColon(),
+                              _buildCountdownUnit(
+                                value: (remaining.inSeconds % 60)
+                                    .toString()
+                                    .padLeft(2, '0'),
+                                label: 'ثانية',
+                              ),
+                            ],
                           ),
                         ),
                       ],
@@ -419,12 +808,56 @@ class _NextPrayerHeroCard extends StatelessWidget {
     );
   }
 
-  String _formatDuration(Duration d) {
-    final h = d.inHours;
-    final m = d.inMinutes.remainder(60).toString().padLeft(2, '0');
-    final s = d.inSeconds.remainder(60).toString().padLeft(2, '0');
-    if (h > 0) return '$h:$m:$s';
-    return '$m:$s';
+  Widget _buildCountdownUnit({required String value, required String label}) {
+    return Container(
+      constraints: const BoxConstraints(minWidth: 64),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+          color: Colors.white.withValues(alpha: 0.18),
+        ),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            value,
+            style: GoogleFonts.tajawal(
+              fontSize: 28,
+              fontWeight: FontWeight.w900,
+              color: AppColors.goldLight,
+              height: 1.05,
+              letterSpacing: 1.0,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            label,
+            style: GoogleFonts.tajawal(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: AppColors.emeraldPale.withValues(alpha: 0.9),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCountdownColon() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 6),
+      child: Text(
+        ':',
+        style: GoogleFonts.tajawal(
+          fontSize: 24,
+          fontWeight: FontWeight.w900,
+          color: AppColors.gold.withValues(alpha: 0.8),
+        ),
+      ),
+    );
   }
 
   IconData _iconForPrayer(String name) {
@@ -448,190 +881,85 @@ class _NextPrayerHeroCard extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Today's Prayer Times Grid
+// WhatsApp Channel Banner
 // ─────────────────────────────────────────────────────────────────────────────
 
-class _TodayPrayerGrid extends StatelessWidget {
-  const _TodayPrayerGrid({required this.times, required this.now});
-  final PrayerTimes times;
-  final DateTime now;
+class _WhatsAppChannelBanner extends StatelessWidget {
+  static const _channelUrl =
+      'https://whatsapp.com/channel/0029VbDitEW9MF8usnUyMI0y';
 
-  @override
-  Widget build(BuildContext context) {
-    final next = times.nextPrayer(now);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.only(bottom: 12, right: 4),
-          child: Text(
-            AppLocalizations.of(context)?.translate('today_prayer_times') ?? "Today's Times",
-            style: GoogleFonts.tajawal(
-              fontSize: 18,
-              fontWeight: FontWeight.w800,
-              color: AppColors.emeraldDark,
-            ),
-          ),
-        ),
-        ...times.allPrayers.map((entry) {
-          final isNext = entry.key == next?.key;
-          final localizedName = AppLocalizations.of(context)?.translate(entry.key) ?? entry.key;
-          final dt = PrayerTimes.timeToDateTime(entry.value, now);
-          final isPast = dt != null && dt.isBefore(now);
-
-          return _PrayerRow(
-            name: localizedName,
-            time: entry.value,
-            isNext: isNext,
-            isPast: isPast,
-          );
-        }),
-      ],
-    );
+  Future<void> _openChannel() async {
+    final uri = Uri.parse(_channelUrl);
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    }
   }
-}
-
-class _PrayerRow extends StatelessWidget {
-  const _PrayerRow({
-    required this.name,
-    required this.time,
-    required this.isNext,
-    required this.isPast,
-  });
-  final String name;
-  final String time;
-  final bool isNext;
-  final bool isPast;
 
   @override
   Widget build(BuildContext context) {
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 300),
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
-      decoration: BoxDecoration(
-        color: isNext
-            ? AppColors.emeraldDark.withValues(alpha: 0.06)
-            : AppColors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: isNext ? AppColors.emerald : AppColors.divider,
-          width: isNext ? 1.5 : 1,
-        ),
-        boxShadow: isNext
-            ? [
-                BoxShadow(
-                  color: AppColors.emerald.withValues(alpha: 0.12),
-                  blurRadius: 12,
-                  offset: const Offset(0, 4),
-                ),
-              ]
-            : [],
-      ),
-      child: Row(
-        children: [
-          // Time (RTL — on the right)
-          Text(
-            time,
-            style: GoogleFonts.tajawal(
-              fontSize: 16,
-              fontWeight: FontWeight.w700,
-              color: isNext
-                  ? AppColors.emerald
-                  : isPast
-                      ? AppColors.grey300
-                      : AppColors.charcoal,
-              letterSpacing: 0.5,
-            ),
-          ),
-          const Spacer(),
-          // Prayer name
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (isNext)
-                Container(
-                  margin: const EdgeInsets.only(left: 8),
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: AppColors.emerald,
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Text(
-                    AppLocalizations.of(context)?.translate('next_prayer') ?? 'Next',
-                    style: GoogleFonts.tajawal(
-                      fontSize: 10,
-                      color: Colors.white,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-              Text(
-                name,
-                style: GoogleFonts.tajawal(
-                  fontSize: 16,
-                  fontWeight: isNext ? FontWeight.w800 : FontWeight.w600,
-                  color: isNext
-                      ? AppColors.emeraldDark
-                      : isPast
-                          ? AppColors.grey300
-                          : AppColors.grey700,
-                ),
-                textDirection: TextDirection.rtl,
-              ),
-              const SizedBox(width: 8),
-              Icon(
-                isPast ? Icons.check_circle_rounded : Icons.radio_button_unchecked_rounded,
-                size: 16,
-                color: isPast ? AppColors.success : AppColors.grey300,
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Calculation Method Badge
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _MethodBadge extends StatelessWidget {
-  const _MethodBadge({required this.methodId, required this.onTap});
-  final int methodId;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(12),
+    return GestureDetector(
+      onTap: _openChannel,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         decoration: BoxDecoration(
-          color: AppColors.surfaceVariant,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: AppColors.divider),
+          gradient: const LinearGradient(
+            colors: [Color(0xFF25D366), Color(0xFF128C7E)],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFF25D366).withValues(alpha: 0.35),
+              blurRadius: 12,
+              offset: const Offset(0, 4),
+            ),
+          ],
         ),
         child: Row(
           children: [
-            const Icon(Icons.calculate_outlined, size: 16, color: AppColors.grey500),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                context.tr('calc_method_label').replaceAll('{method}', context.tr('method_$methodId')),
-                style: GoogleFonts.tajawal(
-                  fontSize: 12,
-                  color: AppColors.grey500,
-                ),
-                textDirection: TextDirection.rtl,
-                overflow: TextOverflow.ellipsis,
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.2),
+                borderRadius: BorderRadius.circular(12),
               ),
-
-
+              child: const Icon(
+                Icons.campaign_rounded,
+                color: Colors.white,
+                size: 24,
+              ),
             ),
-            const Icon(Icons.arrow_drop_down_rounded, size: 20, color: AppColors.grey500),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'قناتنا على الواتساب',
+                    style: GoogleFonts.tajawal(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w800,
+                      color: Colors.white,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    'تابعنا للحصول على آخر الأخبار والتحديثات',
+                    style: GoogleFonts.tajawal(
+                      fontSize: 12,
+                      color: Colors.white.withValues(alpha: 0.85),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Icon(
+              Icons.arrow_forward_ios_rounded,
+              size: 16,
+              color: Colors.white,
+            ),
           ],
         ),
       ),
@@ -647,190 +975,75 @@ class _GuestUpgradeBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [AppColors.goldPale, Color(0xFFFFF8E1)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
+        color: AppColors.goldPale,
         borderRadius: BorderRadius.circular(18),
         border: Border.all(color: AppColors.gold.withValues(alpha: 0.35)),
       ),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          const Icon(Icons.person_add_alt_1_rounded,
-              color: AppColors.gold, size: 30),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  AppLocalizations.of(context)?.translate('guest_upgrade_title') ?? 'Create a free account',
-                  style: GoogleFonts.tajawal(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w800,
-                    color: AppColors.gold,
-                  ),
-                  textAlign: TextAlign.end,
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  AppLocalizations.of(context)?.translate('guest_upgrade_desc') ?? 'Save your preferences and track times across devices.',
-                  style: GoogleFonts.tajawal(
-                    fontSize: 12,
-                    color: AppColors.grey700,
-                    height: 1.4,
-                  ),
-                  textAlign: TextAlign.end,
-                ),
-              ],
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: AppColors.gold.withValues(alpha: 0.2),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(
+              Icons.stars_rounded,
+              color: AppColors.gold,
+              size: 22,
             ),
           ),
           const SizedBox(width: 12),
-          // Bounded width prevents the button from receiving infinite constraints
-          // when the surrounding SliverList layout is interrupted by navigation.
-          SizedBox(
-            width: 72,
-            child: ElevatedButton(
-              onPressed: () => context.go(AppRoutes.register),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.gold,
-                foregroundColor: Colors.white,
-                elevation: 0,
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12)),
-              ),
-              child: Text(
-                AppLocalizations.of(context)?.translate('create_account') ?? 'Sign up',
-                style: GoogleFonts.tajawal(
-                    fontWeight: FontWeight.w800, fontSize: 13),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Method Picker Bottom Sheet
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _MethodPickerSheet extends StatefulWidget {
-  const _MethodPickerSheet({this.currentMethodId});
-  final int? currentMethodId;
-
-  @override
-  State<_MethodPickerSheet> createState() => _MethodPickerSheetState();
-}
-
-class _MethodPickerSheetState extends State<_MethodPickerSheet> {
-  late int? _selected;
-
-  @override
-  void initState() {
-    super.initState();
-    _selected = widget.currentMethodId;
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-      decoration: BoxDecoration(
-        color: AppColors.cream,
-        borderRadius: BorderRadius.circular(24),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // Handle
-          Container(
-            margin: const EdgeInsets.only(top: 12, bottom: 8),
-            width: 40,
-            height: 4,
-            decoration: BoxDecoration(
-              color: AppColors.grey300,
-              borderRadius: BorderRadius.circular(2),
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
-            child: Row(
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Expanded(
-                  child: Text(
-                    context.tr('calc_method_title'),
-                    style: GoogleFonts.tajawal(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w800,
-                      color: AppColors.emeraldDark,
-                    ),
-                    textDirection: TextDirection.rtl,
+                Text(
+                  AppLocalizations.of(context)?.translate('upgrade_title') ??
+                      'Unlock Full Access',
+                  style: GoogleFonts.tajawal(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.charcoal,
                   ),
                 ),
-
-                TextButton(
-                  onPressed: () {
-                    // Auto-detect (no override) -> return 0 sentinel
-                    Navigator.of(context).pop(0);
-                  },
-                  child: Text(
-                    context.tr('auto'),
-                    style: GoogleFonts.tajawal(
-                      color: AppColors.emerald,
-                      fontWeight: FontWeight.w700,
-                    ),
+                Text(
+                  AppLocalizations.of(context)?.translate('upgrade_subtitle') ??
+                      'Create an account to follow mosques & get alerts',
+                  style: GoogleFonts.tajawal(
+                    fontSize: 12,
+                    color: AppColors.grey700,
                   ),
-
                 ),
               ],
             ),
           ),
-          const Divider(height: 1),
-          ConstrainedBox(
-            constraints: BoxConstraints(
-              maxHeight: MediaQuery.of(context).size.height * 0.55,
-            ),
-            child: ListView.builder(
-              shrinkWrap: true,
-              itemCount: PrayerMethodMapper.allMethods.length,
-              itemBuilder: (ctx, i) {
-                final entry = PrayerMethodMapper.allMethods[i];
-                final isSelected = _selected == entry.key;
-                return ListTile(
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
-                  title: Text(
-                    context.tr('method_${entry.key}'),
-                    style: GoogleFonts.tajawal(
-                      fontSize: 14,
-                      fontWeight: isSelected ? FontWeight.w800 : FontWeight.w500,
-                      color: isSelected ? AppColors.emerald : AppColors.charcoal,
-                    ),
-                    textDirection: TextDirection.rtl,
-                  ),
-
-                  trailing: isSelected
-                      ? const Icon(Icons.check_circle_rounded, color: AppColors.emerald)
-                      : null,
-                  onTap: () {
-                    setState(() => _selected = entry.key);
-                    Navigator.of(context).pop(entry.key);
-                  },
-                );
-              },
+          const SizedBox(width: 8),
+          SizedBox(
+            width: 80,
+            child: ElevatedButton(
+              onPressed: () => context.go('/register'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.emerald,
+                foregroundColor: Colors.white,
+                elevation: 0,
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+              child: Text(
+                AppLocalizations.of(context)?.translate('register_btn') ??
+                    'Register',
+                style: GoogleFonts.tajawal(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
             ),
           ),
-          const SizedBox(height: 16),
         ],
       ),
     );
@@ -856,29 +1069,6 @@ class _NextPrayerCardSkeleton extends StatelessWidget {
   }
 }
 
-class _PrayerGridSkeleton extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: List.generate(
-        6,
-        (i) => Padding(
-          padding: const EdgeInsets.only(bottom: 8),
-          child: _Shimmer(
-            child: Container(
-              height: 50,
-              decoration: BoxDecoration(
-                color: AppColors.grey100,
-                borderRadius: BorderRadius.circular(16),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 class _ErrorCard extends StatelessWidget {
   const _ErrorCard({required this.onRetry});
   final VoidCallback onRetry;
@@ -894,7 +1084,8 @@ class _ErrorCard extends StatelessWidget {
       ),
       child: Column(
         children: [
-          const Icon(Icons.cloud_off_rounded, color: AppColors.grey300, size: 42),
+          const Icon(Icons.cloud_off_rounded,
+              color: AppColors.grey300, size: 42),
           const SizedBox(height: 12),
           Text(
             context.tr('prayer_load_failed'),
@@ -920,13 +1111,13 @@ class _ErrorCard extends StatelessWidget {
               context.tr('retry'),
               style: GoogleFonts.tajawal(fontWeight: FontWeight.w700),
             ),
-
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.emerald,
               foregroundColor: Colors.white,
               elevation: 0,
               shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12)),
+                borderRadius: BorderRadius.circular(12),
+              ),
             ),
           ),
         ],
@@ -944,7 +1135,8 @@ class _Shimmer extends StatefulWidget {
   State<_Shimmer> createState() => _ShimmerState();
 }
 
-class _ShimmerState extends State<_Shimmer> with SingleTickerProviderStateMixin {
+class _ShimmerState extends State<_Shimmer>
+    with SingleTickerProviderStateMixin {
   late AnimationController _ctrl;
   late Animation<double> _anim;
 

@@ -11,11 +11,10 @@ import '../../mosques/data/mosque_repository.dart';
 import '../data/post_repository.dart';
 import '../domain/post_model.dart';
 
-const _kCategories = ['all', 'nearby', 'lessons', 'announcements', 'activities'];
-const _kNearbyKm = 15.0;
-
 class FeedScreen extends ConsumerStatefulWidget {
-  const FeedScreen({super.key});
+  const FeedScreen({super.key, this.initialTabIndex = 0});
+
+  final int initialTabIndex;
 
   @override
   ConsumerState<FeedScreen> createState() => _FeedScreenState();
@@ -24,13 +23,24 @@ class FeedScreen extends ConsumerStatefulWidget {
 class _FeedScreenState extends ConsumerState<FeedScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
-  String _selectedCategory = 'all';
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    _tabController = TabController(
+      length: 2,
+      vsync: this,
+      initialIndex: widget.initialTabIndex.clamp(0, 1),
+    );
     _seedIfNeeded();
+  }
+
+  @override
+  void didUpdateWidget(FeedScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.initialTabIndex != oldWidget.initialTabIndex) {
+      _tabController.animateTo(widget.initialTabIndex.clamp(0, 1));
+    }
   }
 
   @override
@@ -48,49 +58,14 @@ class _FeedScreenState extends ConsumerState<FeedScreen>
         );
   }
 
-  List<PostModel> _applyFypFilter(List<PostModel> all, List<String> followedImamIds) {
-    if (_selectedCategory == 'all') return all;
-    if (_selectedCategory == 'nearby') {
-      final loc = ref.read(userLocationProvider);
-      if (loc == null) return all;
-      final nearby = all.where((p) {
-        if (p.latitude == null || p.longitude == null) return false;
-        final dist = LocationService.calculateDistance(
-          startLat: loc.latitude,
-          startLng: loc.longitude,
-          endLat: p.latitude!,
-          endLng: p.longitude!,
-        );
-        return dist <= _kNearbyKm;
-      }).toList();
-      nearby.sort((a, b) {
-        final aFollowed = a.imamId != null && followedImamIds.contains(a.imamId);
-        final bFollowed = b.imamId != null && followedImamIds.contains(b.imamId);
-        if (aFollowed && !bFollowed) return -1;
-        if (!aFollowed && bFollowed) return 1;
-        return b.createdAt.compareTo(a.createdAt);
-      });
-      return nearby;
-    }
-    final dbCat = {
-      'lessons': 'دروس',
-      'announcements': 'إعلانات',
-      'activities': 'أنشطة',
-    }[_selectedCategory];
-    return all.where((p) => p.category == dbCat).toList();
-  }
-
   @override
   Widget build(BuildContext context) {
     final isGuest = ref.watch(isGuestProvider);
     final savedIdsAsync = ref.watch(savedPostIdsProvider);
     final savedIds = savedIdsAsync.asData?.value ?? {};
-    final followedImamsAsync = ref.watch(followedImamsProvider);
-    final followedImamIds = followedImamsAsync.asData?.value ?? [];
     final followedMosquesAsync = ref.watch(followedMosquesProvider);
-    // followedMosqueIds is resolved internally by _FollowedTab
-    final _ =
-        (followedMosquesAsync.asData?.value ?? []).map((m) => m.id).toList();
+    final followedMosqueIds =
+        (followedMosquesAsync.asData?.value ?? []).map((m) => m.id).toSet();
     final postsAsync = ref.watch(postsStreamProvider(null));
 
     return Scaffold(
@@ -137,13 +112,10 @@ class _FeedScreenState extends ConsumerState<FeedScreen>
         children: [
           // ── Tab 1: For You (FYP) ────────────────────────────────
           _FypTab(
-            postsAsync: postsAsync,
             savedIds: savedIds,
             isGuest: isGuest,
-            followedImamIds: followedImamIds,
-            selectedCategory: _selectedCategory,
-            onCategoryChanged: (cat) => setState(() => _selectedCategory = cat),
-            applyFilter: _applyFypFilter,
+            followedMosqueIds: followedMosqueIds,
+            onGoToFollowedPosts: () => _tabController.animateTo(1),
             onSave: _toggleSave,
           ),
 
@@ -152,6 +124,7 @@ class _FeedScreenState extends ConsumerState<FeedScreen>
             postsAsync: postsAsync,
             savedIds: savedIds,
             isGuest: isGuest,
+            followedMosqueIds: followedMosqueIds,
             onSave: _toggleSave,
           ),
         ],
@@ -181,98 +154,138 @@ class _FeedScreenState extends ConsumerState<FeedScreen>
 // Tab 1: For You
 // ─────────────────────────────────────────────────────────────────────────────
 
-class _FypTab extends StatelessWidget {
+class _FypTab extends ConsumerWidget {
   const _FypTab({
-    required this.postsAsync,
     required this.savedIds,
     required this.isGuest,
-    required this.followedImamIds,
-    required this.selectedCategory,
-    required this.onCategoryChanged,
-    required this.applyFilter,
+    required this.followedMosqueIds,
+    required this.onGoToFollowedPosts,
     required this.onSave,
   });
 
-  final AsyncValue<List<PostModel>> postsAsync;
   final Set<String> savedIds;
   final bool isGuest;
-  final List<String> followedImamIds;
-  final String selectedCategory;
-  final ValueChanged<String> onCategoryChanged;
-  final List<PostModel> Function(List<PostModel>, List<String>) applyFilter;
+  final Set<String> followedMosqueIds;
+  final VoidCallback onGoToFollowedPosts;
   final Future<void> Function(PostModel, bool, bool) onSave;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final paginatedState = ref.watch(paginatedPostsNotifierProvider);
+
     return Column(
       children: [
-        Container(
-          color: AppColors.emeraldDark,
-          padding: const EdgeInsets.only(bottom: 12, top: 4),
-          child: SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Row(
-              children: _kCategories.reversed.map((cat) {
-                final selected = cat == selectedCategory;
-                return Padding(
-                  padding: const EdgeInsets.only(right: 8),
-                  child: GestureDetector(
-                    onTap: () => onCategoryChanged(cat),
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 180),
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
-                      decoration: BoxDecoration(
-                        color: selected ? AppColors.gold : Colors.white12,
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(
-                          color: selected ? AppColors.gold : Colors.white24,
-                        ),
-                      ),
-                      child: Text(
-                        context.tr('cat_$cat'),
-                        style: GoogleFonts.tajawal(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w700,
-                          color: selected ? Colors.white : Colors.white70,
-                        ),
-                      ),
+        // ── Followed Posts Navigation Banner Button ───────────
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+          child: GestureDetector(
+            onTap: onGoToFollowedPosts,
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: AppColors.divider),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.03),
+                    blurRadius: 6,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: AppColors.gold.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(
+                      Icons.dynamic_feed_rounded,
+                      color: AppColors.gold,
+                      size: 20,
                     ),
                   ),
-                );
-              }).toList(),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'منشورات المساجد المتابعة',
+                          style: GoogleFonts.tajawal(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.charcoal,
+                          ),
+                        ),
+                        Text(
+                          'عرض منشورات وأنشطة المساجد التي تتابعها فقط',
+                          style: GoogleFonts.tajawal(
+                            fontSize: 11,
+                            color: AppColors.grey500,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const Icon(
+                    Icons.arrow_forward_ios_rounded,
+                    size: 14,
+                    color: AppColors.grey300,
+                  ),
+                ],
+              ),
             ),
           ),
         ),
         Expanded(
-          child: postsAsync.when(
-            loading: () =>
-                const Center(child: CircularProgressIndicator(color: AppColors.emerald)),
-            error: (e, st) => Center(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(context.tr('feed_load_posts_failed'),
-                        style: GoogleFonts.tajawal(color: AppColors.grey700, fontSize: 16, fontWeight: FontWeight.w700)),
-                    const SizedBox(height: 8),
-                    Text(e.toString(),
-                        style: GoogleFonts.tajawal(color: AppColors.grey500, fontSize: 11),
-                        textAlign: TextAlign.center),
-                  ],
-                ),
-              ),
-            ),
-            data: (allPosts) {
-              final posts = applyFilter(allPosts, followedImamIds);
-              if (posts.isEmpty) {
-                return _EmptyPosts(message: context.tr('no_posts_category'));
+          child: Builder(
+            builder: (context) {
+              if (paginatedState.isLoading && paginatedState.posts.isEmpty) {
+                return const Center(
+                  child: CircularProgressIndicator(color: AppColors.emerald),
+                );
               }
+              if (paginatedState.error != null && paginatedState.posts.isEmpty) {
+                return Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(context.tr('feed_load_posts_failed'),
+                            style: GoogleFonts.tajawal(
+                                color: AppColors.grey700,
+                                fontSize: 16,
+                                fontWeight: FontWeight.w700)),
+                        const SizedBox(height: 8),
+                        Text(paginatedState.error.toString(),
+                            style: GoogleFonts.tajawal(
+                                color: AppColors.grey500, fontSize: 11),
+                            textAlign: TextAlign.center),
+                      ],
+                    ),
+                  ),
+                );
+              }
+
+              final posts = paginatedState.posts;
+              if (posts.isEmpty) {
+                return _EmptyPosts(message: context.tr('feed_empty_posts'));
+              }
+
               return _PostsList(
                 posts: posts,
                 savedIds: savedIds,
                 isGuest: isGuest,
+                followedMosqueIds: followedMosqueIds,
+                isLoadingMore: paginatedState.isLoadingMore,
+                onLoadMore: () => ref.read(paginatedPostsNotifierProvider.notifier).fetchNextPage(),
+                onRefresh: () async => ref.read(paginatedPostsNotifierProvider.notifier).refresh(),
                 onSave: onSave,
               );
             },
@@ -292,12 +305,14 @@ class _FollowedTab extends ConsumerWidget {
     required this.postsAsync,
     required this.savedIds,
     required this.isGuest,
+    required this.followedMosqueIds,
     required this.onSave,
   });
 
   final AsyncValue<List<PostModel>> postsAsync;
   final Set<String> savedIds;
   final bool isGuest;
+  final Set<String> followedMosqueIds;
   final Future<void> Function(PostModel, bool, bool) onSave;
 
   @override
@@ -313,7 +328,7 @@ class _FollowedTab extends ConsumerWidget {
     }
 
     final followedMosqueIds =
-        (followedMosquesAsync.asData?.value ?? []).map((m) => m.id).toList();
+        (followedMosquesAsync.asData?.value ?? []).map((m) => m.id).toSet();
     final followedImamIds = followedImamsAsync.asData?.value ?? [];
 
     return postsAsync.when(
@@ -362,6 +377,7 @@ class _FollowedTab extends ConsumerWidget {
           posts: posts,
           savedIds: savedIds,
           isGuest: isGuest,
+          followedMosqueIds: followedMosqueIds,
           onSave: onSave,
         );
       },
@@ -378,33 +394,80 @@ class _PostsList extends ConsumerWidget {
     required this.posts,
     required this.savedIds,
     required this.isGuest,
+    required this.followedMosqueIds,
     required this.onSave,
+    this.onLoadMore,
+    this.isLoadingMore = false,
+    this.onRefresh,
   });
 
   final List<PostModel> posts;
   final Set<String> savedIds;
   final bool isGuest;
+  final Set<String> followedMosqueIds;
   final Future<void> Function(PostModel, bool, bool) onSave;
+  final VoidCallback? onLoadMore;
+  final bool isLoadingMore;
+  final Future<void> Function()? onRefresh;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    return RefreshIndicator(
-      color: AppColors.emerald,
-      onRefresh: () async => ref.invalidate(postsStreamProvider),
-      child: ListView.builder(
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 108),
-        itemCount: posts.length,
-        itemBuilder: (ctx, i) {
-          final post = posts[i];
-          final isSaved = savedIds.contains(post.id);
-          return PostCard(
-            post: post,
-            isSaved: isSaved,
-            isGuest: isGuest,
-            onSave: () => onSave(post, isSaved, isGuest),
-            onTap: () => context.push('/post/${post.id}', extra: post),
-          );
+    final totalCount = posts.length + (isLoadingMore ? 1 : 0);
+
+    return NotificationListener<ScrollNotification>(
+      onNotification: (scrollInfo) {
+        if (scrollInfo.metrics.pixels >=
+            scrollInfo.metrics.maxScrollExtent - 300) {
+          onLoadMore?.call();
+        }
+        return false;
+      },
+      child: RefreshIndicator(
+        color: AppColors.emerald,
+        onRefresh: () async {
+          if (onRefresh != null) {
+            await onRefresh!();
+          } else {
+            ref.invalidate(postsStreamProvider);
+          }
         },
+        child: ListView.builder(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 108),
+          itemCount: totalCount,
+          addAutomaticKeepAlives: false,
+          itemBuilder: (ctx, i) {
+            if (i >= posts.length) {
+              return const Padding(
+                padding: EdgeInsets.symmetric(vertical: 16),
+                child: Center(
+                  child: SizedBox(
+                    width: 24,
+                    height: 24,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2.5,
+                      color: AppColors.emerald,
+                    ),
+                  ),
+                ),
+              );
+            }
+
+            final post = posts[i];
+            final isSaved = savedIds.contains(post.id);
+            final isFollowing = followedMosqueIds.contains(post.mosqueId);
+            return RepaintBoundary(
+              child: PostCard(
+                key: ValueKey(post.id),
+                post: post,
+                isSaved: isSaved,
+                isGuest: isGuest,
+                isFollowing: isFollowing,
+                onSave: () => onSave(post, isSaved, isGuest),
+                onTap: () => context.push('/post/${post.id}', extra: post),
+              ),
+            );
+          },
+        ),
       ),
     );
   }
@@ -565,6 +628,7 @@ class PostCard extends ConsumerWidget {
     required this.post,
     required this.isSaved,
     required this.isGuest,
+    required this.isFollowing,
     required this.onSave,
     required this.onTap,
   });
@@ -572,6 +636,7 @@ class PostCard extends ConsumerWidget {
   final PostModel post;
   final bool isSaved;
   final bool isGuest;
+  final bool isFollowing;
   final VoidCallback onSave;
   final VoidCallback onTap;
 
@@ -580,24 +645,24 @@ class PostCard extends ConsumerWidget {
     final elapsed = _elapsed(context, post.createdAt);
     final isLikedAsync = ref.watch(isPostLikedProvider(post.id));
     final isLiked = isLikedAsync.asData?.value ?? false;
-    final likesCountAsync = ref.watch(postLikesCountProvider(post.id));
-    final likesCount = likesCountAsync.asData?.value ?? post.likeCount;
-    final commentsCountAsync = ref.watch(postCommentsCountProvider(post.id));
-    final commentsCount = commentsCountAsync.asData?.value ?? post.commentCount;
+    final likesCount = post.likeCount;
+    final commentsCount = post.commentCount;
 
-    final mosqueAsync = ref.watch(mosqueByIdProvider(post.mosqueId));
-    final mosque = mosqueAsync.asData?.value;
-    final displayName = (mosque?.name.isNotEmpty == true)
-        ? mosque!.name
+    final mosquesMap = ref.watch(mosquesMapProvider);
+    final mosque = mosquesMap[post.mosqueId];
+    final fallbackMosque = mosque == null && post.mosqueId.isNotEmpty
+        ? ref.watch(mosqueByIdProvider(post.mosqueId)).asData?.value
+        : null;
+    final effectiveMosque = mosque ?? fallbackMosque;
+
+    final displayName = (effectiveMosque != null && effectiveMosque.name.isNotEmpty)
+        ? effectiveMosque.name
         : (post.mosqueName.isNotEmpty && post.mosqueName != 'مسجد')
             ? post.mosqueName
-            : context.tr('anonymous'); // Guest / Anonymous
-    final displayPhoto = mosque?.photo ?? post.mosquePhoto;
-    final displayVerified = mosque?.verified ?? post.verified;
-    final liveImamId = mosque?.imamId ?? post.imamId;
-
-    final isFollowingAsync = ref.watch(isFollowingProvider(post.mosqueId));
-    final isFollowing = isFollowingAsync.asData?.value ?? false;
+            : (post.mosqueName.isNotEmpty ? post.mosqueName : 'مسجد');
+    final displayPhoto = effectiveMosque?.photo ?? post.mosquePhoto;
+    final displayVerified = effectiveMosque?.verified ?? post.verified;
+    final liveImamId = effectiveMosque?.imamId ?? post.imamId;
 
     final imamNameAsync = liveImamId != null
         ? ref.watch(imamNameProvider(liveImamId))
@@ -757,6 +822,17 @@ class PostCard extends ConsumerWidget {
                   width: double.infinity,
                   height: 180,
                   fit: BoxFit.cover,
+                  cacheHeight: 500,
+                  cacheWidth: 800,
+                  frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
+                    if (wasSynchronouslyLoaded) return child;
+                    return AnimatedOpacity(
+                      opacity: frame == null ? 0 : 1,
+                      duration: const Duration(milliseconds: 300),
+                      curve: Curves.easeOut,
+                      child: child,
+                    );
+                  },
                   errorBuilder: (context, error, stackTrace) {
                     return Container(
                       height: 180,
@@ -772,15 +848,58 @@ class PostCard extends ConsumerWidget {
 
             Padding(
               padding: const EdgeInsets.fromLTRB(14, 10, 14, 0),
-              child: Text(
-                post.text,
-                maxLines: 3,
-                overflow: TextOverflow.ellipsis,
-                style: GoogleFonts.tajawal(
-                  fontSize: 14,
-                  color: AppColors.grey700,
-                  height: 1.6,
-                ),
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  const maxLines = 3;
+                  final textStyle = GoogleFonts.tajawal(
+                    fontSize: 14,
+                    color: AppColors.grey700,
+                    height: 1.6,
+                  );
+                  final tp = TextPainter(
+                    text: TextSpan(text: post.text, style: textStyle),
+                    maxLines: maxLines,
+                    textDirection: TextDirection.rtl,
+                  )..layout(maxWidth: constraints.maxWidth);
+                  final isOverflowing = tp.didExceedMaxLines;
+
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        post.text,
+                        maxLines: maxLines,
+                        overflow: TextOverflow.ellipsis,
+                        style: textStyle,
+                      ),
+                      if (isOverflowing) ...[
+                        const SizedBox(height: 4),
+                        GestureDetector(
+                          onTap: onTap,
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                context.tr('read_more'),
+                                style: GoogleFonts.tajawal(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w700,
+                                  color: AppColors.emerald,
+                                ),
+                              ),
+                              const SizedBox(width: 3),
+                              const Icon(
+                                Icons.arrow_forward_ios_rounded,
+                                size: 11,
+                                color: AppColors.emerald,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ],
+                  );
+                },
               ),
             ),
 
@@ -878,16 +997,17 @@ class PostCard extends ConsumerWidget {
     if (isFollowing) {
       await mosqueRepo.unfollowMosque(uid, post.mosqueId);
     } else {
-      // Build a minimal MosqueModel from post data to persist the follow
-      final mosqueAsync = ref.read(mosqueByIdProvider(post.mosqueId));
-      final mosque = mosqueAsync.asData?.value;
+      final mosque = ref.read(mosquesMapProvider)[post.mosqueId] ??
+          ref.read(mosqueByIdProvider(post.mosqueId)).asData?.value;
       if (mosque != null) {
         await mosqueRepo.followMosque(uid, mosque);
       } else {
         await mosqueRepo.followMosqueById(uid, post.mosqueId);
       }
       if (context.mounted) {
-        context.showSnackBar(context.tr('followed_mosque_success', args: {'{name}': post.mosqueName}));
+        final targetName = mosque?.name ??
+            (post.mosqueName.isNotEmpty ? post.mosqueName : 'المسجد');
+        context.showSnackBar(context.tr('followed_mosque_success', args: {'{name}': targetName}));
       }
     }
   }

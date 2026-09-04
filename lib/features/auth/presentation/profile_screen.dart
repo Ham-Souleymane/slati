@@ -9,8 +9,10 @@ import '../../../core/localization/app_localizations.dart';
 import '../../../core/providers/firebase_providers.dart';
 import '../../../core/providers/locale_provider.dart';
 import '../../../core/router/app_router.dart';
+import '../../../core/services/notification_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/extensions.dart';
+import '../../../features/prayer_times/domain/adhan_sound.dart';
 import '../application/auth_controller.dart';
 import '../data/user_repository.dart';
 
@@ -40,7 +42,7 @@ class ProfileScreen extends ConsumerWidget {
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
             sliver: SliverList(
               delegate: SliverChildListDelegate([
-                const SizedBox(height: 24),
+                const SizedBox(height: 12),
 
                 // ── Avatar + name hero ────────────────────────
                 currentUserAsync.when(
@@ -60,7 +62,7 @@ class ProfileScreen extends ConsumerWidget {
 
                 ),
 
-                const SizedBox(height: 28),
+                const SizedBox(height: 16),
 
                 // ── Guest upgrade card ────────────────────────
                 if (isGuest) ...[
@@ -90,15 +92,31 @@ class ProfileScreen extends ConsumerWidget {
                   const SizedBox(height: 20),
                 ],
 
-                // ── Saved mosques section ─────────────────────
-                _SectionHeader(title: AppLocalizations.of(context)?.translate('followed_mosques') ?? 'Followed Mosques'),
+                // ── Mosques section ───────────────────────────
+                _SectionHeader(title: context.tr('nav_mosques')),
                 const SizedBox(height: 8),
                 _SettingsCard(
                   items: [
                     _SettingsTile(
+                      icon: Icons.inbox_rounded,
+                      label: context.tr('incoming_questions'),
+                      onTap: () => context.push(AppRoutes.minbarQuestions),
+                    ),
+                    _SettingsTile(
                       icon: Icons.bookmark_rounded,
                       label: AppLocalizations.of(context)?.translate('followed_mosques') ?? 'Followed Mosques',
                       onTap: () => context.push(AppRoutes.savedMosques),
+                    ),
+                    _SettingsTile(
+                      icon: Icons.add_location_alt_rounded,
+                      label: context.tr('add_mosque_title'),
+                      onTap: () {
+                        if (isGuest) {
+                          context.showGuestUpgradeSheet();
+                          return;
+                        }
+                        context.push('/add-mosque');
+                      },
                     ),
                   ],
                 ),
@@ -110,6 +128,13 @@ class ProfileScreen extends ConsumerWidget {
                 const SizedBox(height: 8),
                 _SettingsCard(
                   items: [
+                    // ── Adhan Sound tile ───────────────────────
+                    _SettingsTile(
+                      icon: Icons.mosque_rounded,
+                      label: AppLocalizations.of(context)?.translate('adhan_sound_settings') ?? 'Adhan Sound & Alerts',
+                      trailing: const _AdhanSoundSubtitle(),
+                      onTap: () => context.push(AppRoutes.adhanSoundSettings),
+                    ),
                     _SettingsTile(
                       icon: Icons.notifications_outlined,
                       label: AppLocalizations.of(context)?.translate('notifications') ?? 'Notifications',
@@ -136,8 +161,7 @@ class ProfileScreen extends ConsumerWidget {
                     _SettingsTile(
                       icon: Icons.privacy_tip_outlined,
                       label: AppLocalizations.of(context)?.translate('privacy_policy') ?? 'Privacy Policy',
-                      trailing: const _ComingSoonBadge(),
-                      onTap: () {},
+                      onTap: () => context.push(AppRoutes.privacyPolicy),
                     ),
                   ],
                 ),
@@ -170,6 +194,7 @@ class ProfileScreen extends ConsumerWidget {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
+      useRootNavigator: true,
       backgroundColor: Colors.transparent,
       builder: (_) => _EditNameSheet(controller: controller, firebaseUser: user),
     );
@@ -296,31 +321,32 @@ class _AvatarHero extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(24),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       decoration: BoxDecoration(
         gradient: const LinearGradient(
           colors: [AppColors.emeraldDark, Color(0xFF065F46), Color(0xFF047857)],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(18),
         boxShadow: [
           BoxShadow(
-            color: AppColors.emeraldDark.withValues(alpha: 0.4),
-            blurRadius: 20,
-            offset: const Offset(0, 8),
+            color: AppColors.emeraldDark.withValues(alpha: 0.35),
+            blurRadius: 14,
+            offset: const Offset(0, 6),
           ),
         ],
       ),
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
           // Avatar
           Container(
-            width: 80,
-            height: 80,
+            width: 52,
+            height: 52,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              border: Border.all(color: AppColors.gold, width: 2.5),
+              border: Border.all(color: AppColors.gold, width: 2),
               color: AppColors.emeraldMedium,
             ),
             child: photoUrl != null
@@ -334,13 +360,13 @@ class _AvatarHero extends StatelessWidget {
                 : _AvatarPlaceholder(name: name),
           ),
 
-          const SizedBox(height: 14),
+          const SizedBox(height: 8),
 
           // Name
           Text(
             name,
             style: GoogleFonts.tajawal(
-              fontSize: 20,
+              fontSize: 16,
               fontWeight: FontWeight.w800,
               color: Colors.white,
             ),
@@ -349,27 +375,27 @@ class _AvatarHero extends StatelessWidget {
           ),
 
           if (email != null) ...[
-            const SizedBox(height: 4),
+            const SizedBox(height: 2),
             Text(
               email!,
               style: GoogleFonts.tajawal(
-                fontSize: 13,
+                fontSize: 12,
                 color: AppColors.emeraldPale.withValues(alpha: 0.8),
               ),
               textAlign: TextAlign.center,
             ),
           ],
 
-          const SizedBox(height: 12),
+          const SizedBox(height: 8),
 
           // Badge
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
             decoration: BoxDecoration(
               color: isGuest
                   ? AppColors.gold.withValues(alpha: 0.2)
                   : AppColors.success.withValues(alpha: 0.2),
-              borderRadius: BorderRadius.circular(20),
+              borderRadius: BorderRadius.circular(16),
               border: Border.all(
                 color: isGuest
                     ? AppColors.gold.withValues(alpha: 0.5)
@@ -381,18 +407,17 @@ class _AvatarHero extends StatelessWidget {
               children: [
                 Icon(
                   isGuest ? Icons.person_outline_rounded : Icons.verified_user_rounded,
-                  size: 14,
+                  size: 13,
                   color: isGuest ? AppColors.goldLight : AppColors.success,
                 ),
-                const SizedBox(width: 6),
+                const SizedBox(width: 5),
                 Text(
                   isGuest ? context.tr('guest_user') : context.tr('registered_user'),
                   style: GoogleFonts.tajawal(
-                    fontSize: 12,
+                    fontSize: 11,
                     fontWeight: FontWeight.w700,
                     color: isGuest ? AppColors.goldLight : AppColors.success,
                   ),
-
                 ),
               ],
             ),
@@ -415,7 +440,7 @@ class _AvatarPlaceholder extends StatelessWidget {
       child: Text(
         initial,
         style: GoogleFonts.tajawal(
-          fontSize: 32,
+          fontSize: 22,
           fontWeight: FontWeight.w800,
           color: AppColors.gold,
         ),
@@ -433,10 +458,10 @@ class _AvatarSkeleton extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      height: 200,
+      height: 130,
       decoration: BoxDecoration(
         color: AppColors.emeraldDark.withValues(alpha: 0.2),
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(18),
       ),
     );
   }
@@ -563,11 +588,91 @@ class _SectionHeader extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Adhan Sound Subtitle (shows current selection inline in the tile)
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _AdhanSoundSubtitle extends StatefulWidget {
+  const _AdhanSoundSubtitle();
+
+  @override
+  State<_AdhanSoundSubtitle> createState() => _AdhanSoundSubtitleState();
+}
+
+class _AdhanSoundSubtitleState extends State<_AdhanSoundSubtitle> {
+  String? _soundId;
+  bool _muted = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    final soundId = await NotificationService.instance.getSelectedAdhanSound();
+    final muted = await NotificationService.instance.isAdhanMuted();
+    if (mounted) {
+      setState(() {
+        _soundId = soundId;
+        _muted = muted;
+      });
+    }
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _load();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_soundId == null) {
+      return const SizedBox.shrink();
+    }
+    final option = AdhanSoundOption.findById(_muted ? 'silent' : _soundId);
+    final locale = Localizations.localeOf(context);
+    final isAr = locale.languageCode == 'ar';
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: _muted ? AppColors.grey100 : AppColors.emeraldPale.withValues(alpha: 0.5),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            _muted ? Icons.notifications_off_rounded : Icons.music_note_rounded,
+            size: 12,
+            color: _muted ? AppColors.grey500 : AppColors.emerald,
+          ),
+          const SizedBox(width: 4),
+          Text(
+            _muted
+                ? (isAr ? 'صامت' : 'Silent')
+                : (isAr ? 'مكة' : 'Makkah')
+                    .replaceFirst('مكة', option.id == 'adhan_madina' ? 'المدينة' : (option.id == 'adhan_default' ? 'كلاسيكي' : 'مكة'))
+                    .replaceFirst('Makkah', option.id == 'adhan_madina' ? 'Madina' : (option.id == 'adhan_default' ? 'Classic' : 'Makkah')),
+            style: GoogleFonts.tajawal(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: _muted ? AppColors.grey500 : AppColors.emerald,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Settings Card
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _SettingsCard extends StatelessWidget {
   const _SettingsCard({required this.items});
+
   final List<Widget> items;
 
   @override
@@ -727,6 +832,7 @@ class _LanguageSwitcherTile extends ConsumerWidget {
     showModalBottomSheet<void>(
       context: context,
       backgroundColor: Colors.transparent,
+      useRootNavigator: true,
       useSafeArea: true,
       builder: (ctx) => Container(
         decoration: const BoxDecoration(
@@ -961,15 +1067,17 @@ class _EditNameSheetState extends ConsumerState<_EditNameSheet> {
   Widget build(BuildContext context) {
     return Padding(
       padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
-      child: Container(
-        margin: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-        decoration: BoxDecoration(
-          color: AppColors.cream,
-          borderRadius: BorderRadius.circular(24),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
+      child: SafeArea(
+        top: false,
+        child: Container(
+          margin: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+          decoration: BoxDecoration(
+            color: AppColors.cream,
+            borderRadius: BorderRadius.circular(24),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
             // Handle
             Container(
               margin: const EdgeInsets.only(top: 12, bottom: 8),
@@ -1048,7 +1156,8 @@ class _EditNameSheetState extends ConsumerState<_EditNameSheet> {
                                 } catch (_) {}
                               }
                               setState(() => _saving = false);
-                              if (mounted) Navigator.pop(context);
+                              if (!mounted) return;
+                              Navigator.of(context).pop();
                             },
                       child: _saving
                           ? const SizedBox(
@@ -1074,6 +1183,7 @@ class _EditNameSheetState extends ConsumerState<_EditNameSheet> {
             ),
           ],
         ),
+      ),
       ),
     );
   }

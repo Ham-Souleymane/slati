@@ -1,0 +1,579 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="سياسة الخصوصية لتطبيق صلاتي قربك — Privacy Policy for Salati Qurbak App" />
+  <title>سياسة الخصوصية | Privacy Policy — صلاتي قربك</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Kufi+Arabic:wght@300;400;600;700&family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg-deep:        #0a0f1e;
+      --bg-card:        rgba(255,255,255,0.04);
+      --border:         rgba(255,255,255,0.08);
+      --gold:           #c9a84c;
+      --gold-light:     #f0d080;
+      --teal:           #3ecfb2;
+      --teal-dark:      #1a9e88;
+      --text-primary:   #eef2ff;
+      --text-secondary: #a0aec0;
+      --accent-glow:    rgba(201,168,76,0.18);
+      --radius:         16px;
+      --font-ar:        'Noto Kufi Arabic', sans-serif;
+      --font-en:        'Inter', sans-serif;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--bg-deep);
+      color: var(--text-primary);
+      font-family: var(--font-ar);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background:
+        radial-gradient(ellipse 80% 60% at 20% -10%, rgba(62,207,178,0.12) 0%, transparent 60%),
+        radial-gradient(ellipse 60% 50% at 80% 110%, rgba(201,168,76,0.14) 0%, transparent 60%);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .container {
+      position: relative;
+      z-index: 1;
+      max-width: 860px;
+      margin: 0 auto;
+      padding: 40px 24px 80px;
+    }
+
+    /* ── Language Toggle ── */
+    .lang-toggle {
+      display: flex;
+      justify-content: flex-end;
+      margin-bottom: 32px;
+    }
+    .lang-btn {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 50px;
+      padding: 8px 20px;
+      color: var(--text-secondary);
+      font-size: 14px;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      backdrop-filter: blur(12px);
+      font-family: inherit;
+    }
+    .lang-btn:hover {
+      border-color: var(--gold);
+      color: var(--gold);
+      box-shadow: 0 0 16px var(--accent-glow);
+    }
+
+    /* ── Hero ── */
+    .hero {
+      text-align: center;
+      margin-bottom: 56px;
+    }
+    .hero-icon {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 88px;
+      height: 88px;
+      border-radius: 24px;
+      background: linear-gradient(135deg, var(--teal-dark), var(--teal));
+      font-size: 42px;
+      margin-bottom: 24px;
+      box-shadow: 0 0 40px rgba(62,207,178,0.35), 0 8px 32px rgba(0,0,0,0.4);
+      animation: float 4s ease-in-out infinite;
+    }
+    @keyframes float {
+      0%, 100% { transform: translateY(0); }
+      50%       { transform: translateY(-8px); }
+    }
+    .hero h1 {
+      font-size: clamp(24px, 5vw, 36px);
+      font-weight: 700;
+      background: linear-gradient(135deg, var(--gold-light), var(--gold));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      line-height: 1.3;
+      margin-bottom: 12px;
+    }
+    .hero .subtitle {
+      color: var(--text-secondary);
+      font-size: 14px;
+      font-weight: 300;
+    }
+    .update-badge {
+      display: inline-block;
+      margin-top: 16px;
+      background: rgba(62,207,178,0.12);
+      border: 1px solid rgba(62,207,178,0.3);
+      border-radius: 50px;
+      padding: 6px 18px;
+      font-size: 12px;
+      color: var(--teal);
+    }
+
+    /* ── Intro Card ── */
+    .intro-card {
+      background: linear-gradient(135deg, rgba(201,168,76,0.1), rgba(62,207,178,0.07));
+      border: 1px solid rgba(201,168,76,0.25);
+      border-radius: var(--radius);
+      padding: 24px 28px;
+      margin-bottom: 40px;
+      line-height: 1.9;
+      font-size: 15px;
+      color: #c8d6e8;
+      backdrop-filter: blur(8px);
+    }
+
+    /* ── Sections ── */
+    .section {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 28px 32px;
+      margin-bottom: 20px;
+      backdrop-filter: blur(12px);
+      transition: border-color 0.3s, box-shadow 0.3s;
+      animation: fadeUp 0.5s ease both;
+    }
+    .section:hover {
+      border-color: rgba(201,168,76,0.3);
+      box-shadow: 0 4px 32px rgba(201,168,76,0.08);
+    }
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(20px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .section-header {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      margin-bottom: 18px;
+    }
+    .section-num {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 36px;
+      height: 36px;
+      border-radius: 10px;
+      background: linear-gradient(135deg, var(--teal-dark), var(--teal));
+      font-size: 14px;
+      font-weight: 700;
+      color: #fff;
+      flex-shrink: 0;
+      font-family: 'Inter', sans-serif;
+    }
+    .section-title {
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--gold-light);
+    }
+    .section-body {
+      font-size: 14.5px;
+      line-height: 2;
+      color: #b0c0d8;
+    }
+    .section-body ul {
+      list-style: none;
+      padding: 0;
+      margin-top: 10px;
+    }
+    .section-body ul li {
+      position: relative;
+      padding-inline-start: 22px;
+      margin-bottom: 10px;
+    }
+    .section-body ul li::before {
+      content: '●';
+      position: absolute;
+      inset-inline-start: 0;
+      color: var(--teal);
+      font-size: 8px;
+      top: 7px;
+    }
+    .section-body strong { color: var(--text-primary); font-weight: 600; }
+
+    /* ── Contact Card ── */
+    .contact-card {
+      background: linear-gradient(135deg, rgba(62,207,178,0.1), rgba(62,207,178,0.04));
+      border: 1px solid rgba(62,207,178,0.25);
+      border-radius: var(--radius);
+      padding: 28px 32px;
+      margin-top: 32px;
+      text-align: center;
+    }
+    .contact-title {
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--teal);
+      margin-bottom: 12px;
+    }
+    .contact-card a {
+      display: inline-block;
+      margin-top: 12px;
+      padding: 12px 32px;
+      background: linear-gradient(135deg, var(--teal-dark), var(--teal));
+      border-radius: 50px;
+      color: #fff;
+      text-decoration: none;
+      font-size: 14px;
+      font-weight: 600;
+      transition: all 0.3s;
+      box-shadow: 0 4px 20px rgba(62,207,178,0.3);
+    }
+    .contact-card a:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 28px rgba(62,207,178,0.45);
+    }
+
+    /* ── Footer ── */
+    .footer {
+      text-align: center;
+      margin-top: 48px;
+      color: var(--text-secondary);
+      font-size: 12px;
+      line-height: 1.8;
+    }
+    .footer .brand { color: var(--gold); font-weight: 600; }
+
+    /* ── Language Switching ── */
+    body.en {
+      font-family: var(--font-en);
+      direction: ltr;
+    }
+    body.en .lang-toggle { justify-content: flex-start; }
+
+    .ar-content { display: block; }
+    .en-content { display: none; }
+    body.en .ar-content { display: none; }
+    body.en .en-content { display: block; }
+
+    @media (max-width: 600px) {
+      .container { padding: 24px 16px 60px; }
+      .section { padding: 20px 18px; }
+    }
+  </style>
+</head>
+<body>
+<div class="container">
+
+  <div class="lang-toggle">
+    <button class="lang-btn" onclick="toggleLang()">
+      <span>🌐</span>
+      <span id="langLabel">English</span>
+    </button>
+  </div>
+
+  <!-- ══════════════════════ ARABIC ══════════════════════ -->
+  <div class="ar-content">
+
+    <div class="hero">
+      <div class="hero-icon">🕌</div>
+      <h1>سياسة الخصوصية</h1>
+      <p class="subtitle">صلاتي قربك — تطبيق مواقيت الصلاة والقبلة والمساجد</p>
+      <span class="update-badge">📅 آخر تحديث: 2 سبتمبر 2026</span>
+    </div>
+
+    <div class="intro-card">
+      نحن في <strong>صلاتي قربك</strong> ("نحن"، "التطبيق"، أو "الشركة") نلتزم بحماية خصوصيتك واحترام بياناتك الشخصية. توضح سياسة الخصوصية هذه كيفية جمع بياناتك، استخدامها، مشاركتها، وحمايتها عند استخدامك لتطبيقنا والخدمات المرتبطة به.<br /><br />
+      باستخدامك للتطبيق، فإنك توافق على جمع المعلومات واستخدامها وفقاً لهذه السياسة.
+    </div>
+
+    <!-- 1 -->
+    <div class="section">
+      <div class="section-header">
+        <div class="section-num">1</div>
+        <div class="section-title">البيانات التي نجمعها</div>
+      </div>
+      <div class="section-body">
+        نجمع أنواعاً مختلفة من المعلومات لتقديم خدماتنا وتحسينها:
+        <ul>
+          <li><strong>بيانات الحساب والهوية:</strong> تشمل الاسم، البريد الإلكتروني، وصورة الملف الشخصي (عند التسجيل أو إنشاء حساب).</li>
+          <li><strong>بيانات الموقع الجغرافي (Location Data):</strong> نجمع ونعالج بيانات موقعك الدقيق (GPS) أو غير الدقيق أثناء استخدام التطبيق أو في الخلفية (في حال التفعيل) لحساب مواقيت الصلاة بدقة، وتحديد اتجاه القبلة، وإظهار المساجد القريبة منك.</li>
+          <li><strong>بيانات الاستخدام والجهاز:</strong> تشمل نوع الجهاز، نظام التشغيل، المعرفات الفريدة للجهاز (Device ID)، عنوان IP، وسجلات التفاعل داخل التطبيق (مثل المساجد المتابعة والتفضيلات).</li>
+          <li><strong>المحتوى والتفاعلات:</strong> أي منشورات، تعليقات، أو بلاغات تقوم بإرسالها عبر التطبيق.</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- 2 -->
+    <div class="section">
+      <div class="section-header">
+        <div class="section-num">2</div>
+        <div class="section-title">كيف نستخدم بياناتك</div>
+      </div>
+      <div class="section-body">
+        نستخدم البيانات التي نجمعها للأغراض التالية:
+        <ul>
+          <li><strong>تقديم الخدمات الأساسية:</strong> عرض مواقيت الصلاة الدقيقة، القبلة، وتحديد موقع المساجد حولك.</li>
+          <li><strong>إدارة الحساب:</strong> إنشاء حسابك الشخصي وإدارته وتمكينك من متابعة المساجد وتلقي الإشعارات.</li>
+          <li><strong>التنبيهات والإشعارات:</strong> إرسال إشعارات الأذان، التنبيهات، وتحديثات المساجد التي تتابعها.</li>
+          <li><strong>تحسين وتطوير التطبيق:</strong> تحليل كيفية استخدام التطبيق لإصلاح الأخطاء البرمجية وتحسين تجربة المستخدم.</li>
+          <li><strong>الأمان والحماية:</strong> الكشف عن الأنشطة الاحتيالية أو غير المصرح بها ومنعها لحماية مستخدمينا.</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- 3 -->
+    <div class="section">
+      <div class="section-header">
+        <div class="section-num">3</div>
+        <div class="section-title">مشاركة البيانات والإفصاح عنها</div>
+      </div>
+      <div class="section-body">
+        نحن <strong>لا نبيع</strong> بياناتك الشخصية لأي أطراف خارجية أو شبكات إعلانية. قد نشارك بياناتك فقط في الحالات التالية:
+        <ul>
+          <li><strong>مزودو الخدمات (Third-Party Service Providers):</strong> مع شركات خارجية موثوقة تساعدنا في تشغيل التطبيق (مثل استضافة السيرفرات، إرسال الإشعارات، أو تحليل الأداء)، بشرط التزامهم بالسرية التامة.</li>
+          <li><strong>الامتثال القانوني:</strong> إذا كان ذلك مطلوباً بموجب القانون أو استجابة لطلبات قانونية صحيحة من السلطات الحكومية.</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- 4 -->
+    <div class="section">
+      <div class="section-header">
+        <div class="section-num">4</div>
+        <div class="section-title">حفظ البيانات وحذفها (Right to Erasure)</div>
+      </div>
+      <div class="section-body">
+        يحتفظ التطبيق ببياناتك الشخصية طالما كان حسابك نشطاً أو طالما كان ذلك ضرورياً لتقديم الخدمات.<br /><br />
+        <strong>حق الحذف:</strong> يمكنك حذف حسابك وكافة البيانات المرتبطة به نهائياً في أي وقت مباشرة من داخل التطبيق عبر الانتقال إلى:
+        <ul>
+          <li>الملف الشخصي &rsaquo; <strong>حذف الحساب</strong></li>
+          <li>كما يمكنك التواصل معنا لمسح أي بيانات مخزنة.</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- 5 -->
+    <div class="section">
+      <div class="section-header">
+        <div class="section-num">5</div>
+        <div class="section-title">أمان البيانات</div>
+      </div>
+      <div class="section-body">
+        نحن نطبق إجراءات أمنية واستباقية معقدة (بما في ذلك التشفير ونقل البيانات عبر البروتوكولات الآمنة <strong>SSL/TLS</strong>) لحماية بياناتك من الوصول غير المصرح به، أو التغيير، أو الإفصاح، أو الإتلاف.
+      </div>
+    </div>
+
+    <!-- 6 -->
+    <div class="section">
+      <div class="section-header">
+        <div class="section-num">6</div>
+        <div class="section-title">حقوقك وحماية الخصوصية</div>
+      </div>
+      <div class="section-body">
+        وفقاً لقوانين حماية البيانات العالمية، يحق لك:
+        <ul>
+          <li><strong>الوصول</strong> إلى بياناتك الشخصية التي نحتفظ بها.</li>
+          <li><strong>تصحيح</strong> أي بيانات غير دقيقة.</li>
+          <li><strong>طلب حذف</strong> بياناتك أو تقييد معالجتها.</li>
+          <li><strong>سحب موافقتك</strong> على الوصول إلى الموقع الجغرافي أو الإشعارات في أي وقت من خلال إعدادات هاتفك.</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- 7 -->
+    <div class="section">
+      <div class="section-header">
+        <div class="section-num">7</div>
+        <div class="section-title">التغييرات على سياسة الخصوصية</div>
+      </div>
+      <div class="section-body">
+        قد نحدّث سياسة الخصوصية هذه من وقت لآخر. سنقوم بإخطارك بأي تغييرات عن طريق نشر السياسة الجديدة على هذه الصفحة وتحديث تاريخ "آخر تحديث" في الأعلى.
+      </div>
+    </div>
+
+    <!-- 8 / Contact -->
+    <div class="contact-card">
+      <div class="contact-title">📬 اتصل بنا</div>
+      <div class="section-body" style="text-align:center; color:#a0aec0; margin-bottom:4px;">
+        إذا كانت لديك أي أسئلة أو استفسارات بشأن سياسة الخصوصية هذه أو كيفية التعامل مع بياناتك، يمكنك التواصل معنا عبر البريد الإلكتروني للدعم:
+      </div>
+      <a href="mailto:stayfixsupport@gmail.com">✉️ stayfixsupport@gmail.com</a>
+    </div>
+
+    <div class="footer">
+      <p>جميع الحقوق محفوظة &copy; 2026 <span class="brand">صلاتي قربك</span></p>
+      <p style="margin-top:6px;">هذه السياسة سارية اعتباراً من 2 سبتمبر 2026</p>
+    </div>
+
+  </div><!-- /ar-content -->
+
+
+  <!-- ══════════════════════ ENGLISH ══════════════════════ -->
+  <div class="en-content">
+
+    <div class="hero">
+      <div class="hero-icon">🕌</div>
+      <h1>Privacy Policy</h1>
+      <p class="subtitle">Salati Qurbak — Prayer Times, Qibla &amp; Mosque Finder App</p>
+      <span class="update-badge">📅 Last Updated: September 2, 2026</span>
+    </div>
+
+    <div class="intro-card">
+      At <strong>Salati Qurbak</strong> ("we," "the App," or "the Company"), we are committed to protecting your privacy and respecting your personal data. This Privacy Policy explains how we collect, use, share, and safeguard your information when you use our application and related services.<br /><br />
+      By using the App, you agree to the collection and use of information in accordance with this policy.
+    </div>
+
+    <!-- 1 -->
+    <div class="section">
+      <div class="section-header">
+        <div class="section-num">1</div>
+        <div class="section-title">Data We Collect</div>
+      </div>
+      <div class="section-body">
+        We collect various types of information to provide and improve our services:
+        <ul>
+          <li><strong>Account &amp; Identity Data:</strong> Including your name, email address, and profile picture (when you register or create an account).</li>
+          <li><strong>Location Data:</strong> We collect and process your precise (GPS) or approximate location while using the App or in the background (if enabled) to accurately calculate prayer times, determine the Qibla direction, and display nearby mosques.</li>
+          <li><strong>Usage &amp; Device Data:</strong> Including device type, operating system, unique device identifiers (Device ID), IP address, and in-app interaction logs (such as followed mosques and preferences).</li>
+          <li><strong>Content &amp; Interactions:</strong> Any posts, comments, or reports you submit through the App.</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- 2 -->
+    <div class="section">
+      <div class="section-header">
+        <div class="section-num">2</div>
+        <div class="section-title">How We Use Your Data</div>
+      </div>
+      <div class="section-body">
+        We use the data we collect for the following purposes:
+        <ul>
+          <li><strong>Core Services:</strong> Displaying accurate prayer times, Qibla direction, and locating mosques near you.</li>
+          <li><strong>Account Management:</strong> Creating and managing your personal account, enabling you to follow mosques and receive notifications.</li>
+          <li><strong>Alerts &amp; Notifications:</strong> Sending Adhan notifications, reminders, and updates about mosques you follow.</li>
+          <li><strong>App Improvement &amp; Development:</strong> Analyzing how the App is used to fix bugs and enhance the user experience.</li>
+          <li><strong>Security &amp; Protection:</strong> Detecting and preventing fraudulent or unauthorized activities to protect our users.</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- 3 -->
+    <div class="section">
+      <div class="section-header">
+        <div class="section-num">3</div>
+        <div class="section-title">Data Sharing &amp; Disclosure</div>
+      </div>
+      <div class="section-body">
+        We <strong>do not sell</strong> your personal data to any third parties or advertising networks. We may share your data only in the following cases:
+        <ul>
+          <li><strong>Third-Party Service Providers:</strong> With trusted external companies that help us operate the App (such as server hosting, push notifications, or performance analytics), subject to strict confidentiality obligations.</li>
+          <li><strong>Legal Compliance:</strong> When required by law or in response to valid legal requests from governmental authorities.</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- 4 -->
+    <div class="section">
+      <div class="section-header">
+        <div class="section-num">4</div>
+        <div class="section-title">Data Retention &amp; Deletion (Right to Erasure)</div>
+      </div>
+      <div class="section-body">
+        The App retains your personal data for as long as your account is active or as necessary to provide services.<br /><br />
+        <strong>Right to Delete:</strong> You can permanently delete your account and all associated data at any time directly within the App by navigating to:
+        <ul>
+          <li>Profile &rsaquo; <strong>Delete Account</strong></li>
+          <li>You may also contact us to request the erasure of any stored data.</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- 5 -->
+    <div class="section">
+      <div class="section-header">
+        <div class="section-num">5</div>
+        <div class="section-title">Data Security</div>
+      </div>
+      <div class="section-body">
+        We implement robust and proactive security measures — including encryption and secure data transmission via <strong>SSL/TLS</strong> protocols — to protect your data from unauthorized access, alteration, disclosure, or destruction.
+      </div>
+    </div>
+
+    <!-- 6 -->
+    <div class="section">
+      <div class="section-header">
+        <div class="section-num">6</div>
+        <div class="section-title">Your Rights &amp; Privacy Protections</div>
+      </div>
+      <div class="section-body">
+        Under global data protection laws, you have the right to:
+        <ul>
+          <li><strong>Access</strong> the personal data we hold about you.</li>
+          <li><strong>Correct</strong> any inaccurate data.</li>
+          <li><strong>Request deletion</strong> of your data or restrict its processing.</li>
+          <li><strong>Withdraw consent</strong> for location access or notifications at any time through your device settings.</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- 7 -->
+    <div class="section">
+      <div class="section-header">
+        <div class="section-num">7</div>
+        <div class="section-title">Changes to This Privacy Policy</div>
+      </div>
+      <div class="section-body">
+        We may update this Privacy Policy from time to time. We will notify you of any changes by posting the new policy on this page and updating the "Last Updated" date at the top.
+      </div>
+    </div>
+
+    <!-- 8 / Contact -->
+    <div class="contact-card">
+      <div class="contact-title">📬 Contact Us</div>
+      <div class="section-body" style="text-align:center; color:#a0aec0; margin-bottom:4px;">
+        If you have any questions or concerns about this Privacy Policy or how your data is handled, you can reach us at our support email:
+      </div>
+      <a href="mailto:stayfixsupport@gmail.com">✉️ stayfixsupport@gmail.com</a>
+    </div>
+
+    <div class="footer">
+      <p>All rights reserved &copy; 2026 <span class="brand">Salati Qurbak</span></p>
+      <p style="margin-top:6px;">This policy is effective as of September 2, 2026</p>
+    </div>
+
+  </div><!-- /en-content -->
+
+</div><!-- /container -->
+
+<script>
+  function toggleLang() {
+    const body = document.body;
+    const label = document.getElementById('langLabel');
+    if (body.classList.contains('en')) {
+      body.classList.remove('en');
+      body.setAttribute('lang', 'ar');
+      body.setAttribute('dir', 'rtl');
+      label.textContent = 'English';
+    } else {
+      body.classList.add('en');
+      body.setAttribute('lang', 'en');
+      body.setAttribute('dir', 'ltr');
+      label.textContent = 'العربية';
+    }
+  }
+</script>
+</body>
+</html>

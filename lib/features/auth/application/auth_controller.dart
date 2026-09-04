@@ -42,14 +42,14 @@ class AuthController extends Notifier<AuthState> {
 
   // ── Helpers ──────────────────────────────────────────────────
   String _mapFirebaseError(FirebaseAuthException e) {
-    debugPrint('[AuthController] FirebaseAuthException: code=${e.code}, message=${e.message}');
+    debugPrint('[AuthController] Email/Password FirebaseAuthException: code=${e.code}, message=${e.message}');
     switch (e.code) {
       case 'user-not-found':
         return 'لم يتم العثور على حساب بهذا البريد الإلكتروني.';
       case 'wrong-password':
         return 'كلمة المرور غير صحيحة.';
       case 'invalid-credential':
-        return 'بيانات الاعتماد غير صحيحة. تحقق من البريد وكلمة المرور (أو تأكد من تفعيل تسجيل الدخول بالبريد في Firebase Console).';
+        return 'البريد الإلكتروني أو كلمة المرور غير صحيحة.';
       case 'email-already-in-use':
         return 'هذا البريد الإلكتروني مستخدم بالفعل.';
       case 'weak-password':
@@ -59,13 +59,44 @@ class AuthController extends Notifier<AuthState> {
       case 'too-many-requests':
         return 'محاولات كثيرة. الرجاء الانتظار ثم المحاولة مجددًا.';
       case 'network-request-failed':
-        return 'فشل الاتصال بالشبكة. تحقق من الإنترنت.';
-      case 'account-exists-with-different-credential':
-        return 'الحساب موجود بطريقة تسجيل دخول مختلفة.';
+        return 'فشل الاتصال بالشبكة. تحقق من الاتصال بالإنترنت.';
       case 'operation-not-allowed':
-        return 'طريقة تسجيل الدخول هذه غير مفعلة. يرجى تفعيل البريد الإلكتروني/كلمة المرور في Firebase Console.';
+        return 'طريقة تسجيل الدخول بالبريد غير مفعلة في Firebase Console.';
       default:
         return 'حدث خطأ: ${e.message ?? e.code}';
+    }
+  }
+
+  String _mapAppleAuthError(FirebaseAuthException e) {
+    debugPrint('[AuthController] Apple FirebaseAuthException: code=${e.code}, message=${e.message}');
+    switch (e.code) {
+      case 'canceled':
+      case 'web-context-cancelled':
+        return '';
+      case 'invalid-credential':
+        return 'فشل تسجيل الدخول عبر Apple (بيانات الاعتماد غير صالحة). يرجى التأكد من إعداد تسجيل الدخول عبر Apple في Firebase Console.';
+      case 'operation-not-allowed':
+        return 'تسجيل الدخول عبر Apple غير مفعّل في Firebase Console.';
+      case 'account-exists-with-different-credential':
+        return 'يوجد حساب آخر مستخدم بنفس البريد الإلكتروني.';
+      default:
+        return 'فشل تسجيل الدخول عبر Apple: ${e.message ?? e.code}';
+    }
+  }
+
+  String _mapGoogleAuthError(FirebaseAuthException e) {
+    debugPrint('[AuthController] Google FirebaseAuthException: code=${e.code}, message=${e.message}');
+    switch (e.code) {
+      case 'canceled':
+        return '';
+      case 'invalid-credential':
+        return 'فشل تسجيل الدخول عبر Google (بيانات الاعتماد غير صالحة).';
+      case 'operation-not-allowed':
+        return 'تسجيل الدخول عبر Google غير مفعّل في Firebase Console.';
+      case 'account-exists-with-different-credential':
+        return 'يوجد حساب آخر مستخدم بنفس البريد الإلكتروني.';
+      default:
+        return 'فشل تسجيل الدخول عبر Google: ${e.message ?? e.code}';
     }
   }
 
@@ -141,15 +172,16 @@ class AuthController extends Notifier<AuthState> {
       );
     } on FirebaseAuthException catch (e) {
       debugPrint('FirebaseAuthException in signInWithGoogle: code=${e.code}, message=${e.message}');
+      final msg = _mapGoogleAuthError(e);
       state = AuthState(
-        status: AuthStatus.error,
-        errorMessage: _mapFirebaseError(e),
+        status: msg.isEmpty ? AuthStatus.unauthenticated : AuthStatus.error,
+        errorMessage: msg.isEmpty ? null : msg,
       );
     } catch (e, stack) {
       debugPrint('Unexpected error in AuthController.signInWithGoogle: $e\n$stack');
       state = AuthState(
         status: AuthStatus.error,
-        errorMessage: 'فشل تسجيل الدخول عبر Google. ($e)',
+        errorMessage: 'فشل تسجيل الدخول عبر Google.',
       );
     }
   }
@@ -170,15 +202,16 @@ class AuthController extends Notifier<AuthState> {
       );
     } on FirebaseAuthException catch (e) {
       debugPrint('[AuthController] Apple FirebaseAuthException: code=${e.code}, message=${e.message}');
+      final msg = _mapAppleAuthError(e);
       state = AuthState(
-        status: AuthStatus.error,
-        errorMessage: _mapFirebaseError(e),
+        status: msg.isEmpty ? AuthStatus.unauthenticated : AuthStatus.error,
+        errorMessage: msg.isEmpty ? null : msg,
       );
     } catch (e, stack) {
       debugPrint('[AuthController] Apple unexpected error: $e\n$stack');
       state = AuthState(
         status: AuthStatus.error,
-        errorMessage: 'فشل تسجيل الدخول عبر Apple. ($e)',
+        errorMessage: 'فشل تسجيل الدخول عبر Apple.',
       );
     }
   }
@@ -269,9 +302,10 @@ class AuthController extends Notifier<AuthState> {
         user: credential.user,
       );
     } on FirebaseAuthException catch (e) {
+      final msg = _mapGoogleAuthError(e);
       state = AuthState(
-        status: AuthStatus.error,
-        errorMessage: _mapFirebaseError(e),
+        status: msg.isEmpty ? AuthStatus.unauthenticated : AuthStatus.error,
+        errorMessage: msg.isEmpty ? null : msg,
       );
     } catch (e, stack) {
       debugPrint('linkAndUpgradeAnonymousWithGoogle error: $e\n$stack');
@@ -298,15 +332,16 @@ class AuthController extends Notifier<AuthState> {
       );
     } on FirebaseAuthException catch (e) {
       debugPrint('[AuthController] Apple link FirebaseAuthException: code=${e.code}, message=${e.message}');
+      final msg = _mapAppleAuthError(e);
       state = AuthState(
-        status: AuthStatus.error,
-        errorMessage: _mapFirebaseError(e),
+        status: msg.isEmpty ? AuthStatus.unauthenticated : AuthStatus.error,
+        errorMessage: msg.isEmpty ? null : msg,
       );
     } catch (e, stack) {
       debugPrint('[AuthController] Apple link unexpected error: $e\n$stack');
       state = AuthState(
         status: AuthStatus.error,
-        errorMessage: 'فشل الربط عبر Apple. ($e)',
+        errorMessage: 'فشل الربط عبر Apple.',
       );
     }
   }

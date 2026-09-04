@@ -17,7 +17,17 @@ import '../../features/posts/presentation/feed_screen.dart';
 import '../../features/posts/presentation/post_details_screen.dart';
 import '../../features/auth/presentation/profile_screen.dart';
 import '../../features/mosques/presentation/saved_mosques_screen.dart';
+import '../../features/mosques/presentation/add_mosque_screen.dart';
+import '../../features/ask_sheikh/domain/question_model.dart';
+import '../../features/ask_sheikh/presentation/ask_sheikh_screen.dart';
+import '../../features/ask_sheikh/presentation/ask_question_screen.dart';
+import '../../features/ask_sheikh/presentation/my_questions_screen.dart';
+import '../../features/ask_sheikh/presentation/minbar_incoming_questions_screen.dart';
+import '../../features/ask_sheikh/presentation/question_detail_screen.dart';
+import '../../features/mosques/domain/imam_model.dart';
 import '../../features/posts/domain/post_model.dart';
+import '../../features/prayer_times/presentation/adhan_sound_settings_screen.dart';
+import '../../features/auth/presentation/privacy_policy_screen.dart';
 import '../../shared/widgets/scaffold_with_nav_bar.dart';
 
 // ── Route names ───────────────────────────────────────────────
@@ -34,6 +44,14 @@ abstract class AppRoutes {
   static const postDetails = '/post/:id';
   static const profile = '/profile';
   static const savedMosques = '/saved-mosques';
+  static const addMosque = '/add-mosque';
+  static const adhanSoundSettings = '/adhan-sound-settings';
+  static const ask = '/ask';
+  static const askQuestion = '/ask-question';
+  static const myQuestions = '/my-questions';
+  static const questionDetail = '/question-detail';
+  static const minbarQuestions = '/minbar-questions';
+  static const privacyPolicy = '/privacy-policy';
 }
 
 // ── Router notifier ───────────────────────────────────────────
@@ -168,6 +186,47 @@ final routerProvider = Provider<GoRouter>((ref) {
         name: 'savedMosques',
         builder: (context, state) => const SavedMosquesScreen(),
       ),
+      GoRoute(
+        path: AppRoutes.addMosque,
+        name: 'addMosque',
+        builder: (context, state) => const AddMosqueScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.adhanSoundSettings,
+        name: 'adhanSoundSettings',
+        builder: (context, state) => const AdhanSoundSettingsScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.askQuestion,
+        name: 'askQuestion',
+        builder: (context, state) {
+          final imam = state.extra as ImamModel;
+          return AskQuestionScreen(imam: imam);
+        },
+      ),
+      GoRoute(
+        path: AppRoutes.myQuestions,
+        name: 'myQuestions',
+        builder: (context, state) => const MyQuestionsScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.minbarQuestions,
+        name: 'minbarQuestions',
+        builder: (context, state) => const MinbarIncomingQuestionsScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.questionDetail,
+        name: 'questionDetail',
+        builder: (context, state) {
+          final question = state.extra as QuestionModel;
+          return QuestionDetailScreen(question: question);
+        },
+      ),
+      GoRoute(
+        path: AppRoutes.privacyPolicy,
+        name: 'privacyPolicy',
+        builder: (context, state) => const PrivacyPolicyScreen(),
+      ),
 
       // ── Main app shell with floating nav bar ──────────────────
       ShellRoute(
@@ -190,9 +249,19 @@ final routerProvider = Provider<GoRouter>((ref) {
             builder: (context, state) => const NearbyMosquesScreen(),
           ),
           GoRoute(
+            path: AppRoutes.ask,
+            name: 'ask',
+            builder: (context, state) => const AskSheikhScreen(),
+          ),
+          GoRoute(
             path: AppRoutes.feed,
             name: 'feed',
-            builder: (context, state) => const FeedScreen(),
+            builder: (context, state) {
+              final tabParam = state.uri.queryParameters['tab'];
+              final initialTab =
+                  (tabParam == 'followed' || tabParam == '1') ? 1 : 0;
+              return FeedScreen(initialTabIndex: initialTab);
+            },
           ),
           GoRoute(
             path: AppRoutes.profile,

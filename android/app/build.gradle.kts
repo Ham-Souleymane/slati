@@ -46,9 +46,19 @@ android {
         }
     }
 
+    aaptOptions {
+        noCompress("mp3")
+    }
+
     buildTypes {
         release {
             signingConfig = signingConfigs.getByName("release")
+            isMinifyEnabled = true
+            isShrinkResources = false
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
         }
     }
 }

@@ -87,6 +87,7 @@ class _LocationPermissionScreenState
       context: context,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
+      useRootNavigator: true,
       builder: (_) => const _ManualCityPickerSheet(),
     );
   }

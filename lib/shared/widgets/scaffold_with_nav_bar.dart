@@ -44,10 +44,10 @@ class _ScaffoldWithNavBarState extends State<ScaffoldWithNavBar>
       route: '/nearby-mosques',
     ),
     _NavTab(
-      icon: Icons.article_outlined,
-      activeIcon: Icons.article_rounded,
-      labelKey: 'nav_posts',
-      route: '/feed',
+      icon: Icons.chat_bubble_outline_rounded,
+      activeIcon: Icons.chat_bubble_rounded,
+      labelKey: 'nav_ask',
+      route: '/ask',
     ),
     _NavTab(
       icon: Icons.person_outline_rounded,

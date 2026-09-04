@@ -58,6 +58,32 @@ class PrayerTimes {
         longitude: (json['longitude'] as num).toDouble(),
       );
 
+  PrayerTimes copyWith({
+    String? fajr,
+    String? sunrise,
+    String? dhuhr,
+    String? asr,
+    String? maghrib,
+    String? isha,
+    String? date,
+    int? methodId,
+    double? latitude,
+    double? longitude,
+  }) {
+    return PrayerTimes(
+      fajr: fajr ?? this.fajr,
+      sunrise: sunrise ?? this.sunrise,
+      dhuhr: dhuhr ?? this.dhuhr,
+      asr: asr ?? this.asr,
+      maghrib: maghrib ?? this.maghrib,
+      isha: isha ?? this.isha,
+      date: date ?? this.date,
+      methodId: methodId ?? this.methodId,
+      latitude: latitude ?? this.latitude,
+      longitude: longitude ?? this.longitude,
+    );
+  }
+
   // ── Derived helpers ───────────────────────────────────────────
 
   /// Returns all five main prayer name→time pairs in order.

@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/providers/firebase_providers.dart';
+import '../domain/imam_model.dart';
 import '../domain/mosque_model.dart';
 import '../domain/mosque_prayer_times_model.dart';
 
@@ -12,6 +13,9 @@ class MosqueRepository {
 
   CollectionReference<Map<String, dynamic>> get _mosques =>
       _firestore.collection('mosques');
+
+  CollectionReference<Map<String, dynamic>> get _imams =>
+      _firestore.collection('imams');
 
   // ── Mosque reads ──────────────────────────────────────────────
 
@@ -74,6 +78,44 @@ class MosqueRepository {
         .get();
     if (!doc.exists) return null;
     return MosquePrayerTimes.fromFirestore(doc, mosqueId);
+  }
+
+  // ── Mosque writes & claims ────────────────────────────────────
+
+  /// Adds a new mosque to Firestore (by any worshipper or imam).
+  Future<String> addMosque(MosqueModel mosque) async {
+    final docRef = mosque.id.isNotEmpty
+        ? _mosques.doc(mosque.id)
+        : _mosques.doc();
+    final newMosque = mosque.copyWith(
+      id: docRef.id,
+      createdAt: mosque.createdAt ?? DateTime.now(),
+    );
+    await docRef.set(newMosque.toFirestore());
+    return docRef.id;
+  }
+
+  /// Claims an existing mosque for an imam.
+  /// Updates `mosques/{mosqueId}` with `imamId = imamUid`
+  /// and updates `users/{imamUid}` with `mosqueId = mosqueId` and `role = 'imam'`.
+  Future<void> claimMosque({
+    required String mosqueId,
+    required String imamUid,
+  }) async {
+    final batch = _firestore.batch();
+    final mosqueRef = _mosques.doc(mosqueId);
+    final userRef = _firestore.collection('users').doc(imamUid);
+
+    batch.update(mosqueRef, {
+      'imamId': imamUid,
+    });
+
+    batch.set(userRef, {
+      'role': 'imam',
+      'mosqueId': mosqueId,
+    }, SetOptions(merge: true));
+
+    await batch.commit();
   }
 
   // ── Mock seeding ──────────────────────────────────────────────
@@ -356,6 +398,71 @@ extension FollowMosqueExtension on MosqueRepository {
         .snapshots()
         .map((snap) => snap.docs.map((doc) => doc.id).toList());
   }
+
+  // ── Imam reads (Ask the Sheikh) ────────────────────────────────
+
+  /// Watches all verified and visible imams, optionally filtered by field.
+  /// Field filtering is done client-side to avoid composite index requirements.
+  Stream<List<ImamModel>> watchVerifiedImams({String? field}) {
+    return _imams
+        .where('status', isEqualTo: 'verified')
+        .snapshots()
+        .map((snap) {
+      final list = snap.docs.map(ImamModel.fromFirestore).toList();
+      // Filter out hidden imams and optionally by field
+      final visible = list.where((imam) => imam.isVisible).toList();
+      if (field != null && field.isNotEmpty) {
+        return visible.where((imam) => imam.fields.contains(field)).toList();
+      }
+      return visible;
+    });
+  }
+
+  /// Watches a single imam document by ID.
+  Stream<ImamModel?> watchImamById(String imamId) {
+    return _imams.doc(imamId).snapshots().map((doc) {
+      if (!doc.exists) return null;
+      return ImamModel.fromFirestore(doc);
+    });
+  }
+
+  /// Fetches a single imam document once.
+  Future<ImamModel?> getImamById(String imamId) async {
+    final doc = await _imams.doc(imamId).get();
+    if (!doc.exists) return null;
+    return ImamModel.fromFirestore(doc);
+  }
+
+  // ── Imam writes (Minbar onboarding & admin) ───────────────────
+
+  /// Updates only the Ask-the-Sheikh fields on an existing imam document.
+  /// Safe to call on legacy documents — does not touch existing fields.
+  Future<void> updateImamAskFields({
+    required String imamId,
+    required List<String> fields,
+    String? photoUrl,
+    String? bio,
+    bool isVisible = true,
+  }) async {
+    await _imams.doc(imamId).update({
+      'fields': fields,
+      if (photoUrl != null) 'photo': photoUrl,
+      if (bio != null) 'bio': bio,
+      'isVisible': isVisible,
+    });
+  }
+
+  /// Increments the answeredCount for an imam (called after posting an answer).
+  Future<void> incrementAnsweredCount(String imamId) async {
+    await _imams.doc(imamId).update({
+      'answeredCount': FieldValue.increment(1),
+    });
+  }
+
+  /// Updates the FCM token for an imam (called at Minbar app launch).
+  Future<void> updateImamFcmToken(String imamId, String token) async {
+    await _imams.doc(imamId).update({'fcmToken': token});
+  }
 }
 
 /// Streams all followed mosques for the currently signed-in user.
@@ -401,4 +508,27 @@ final mosqueByIdProvider =
     StreamProvider.family<MosqueModel?, String>((ref, mosqueId) {
   if (mosqueId.isEmpty) return Stream.value(null);
   return ref.watch(mosqueRepositoryProvider).watchMosque(mosqueId);
+});
+
+/// Streams all verified & visible imams for the Ask the Sheikh grid.
+/// Optionally filtered by [field] (one of the IslamicField IDs).
+final verifiedImamsProvider =
+    StreamProvider.family<List<ImamModel>, String?>((ref, field) {
+  return ref
+      .watch(mosqueRepositoryProvider)
+      .watchVerifiedImams(field: field == '' ? null : field);
+});
+
+/// Streams a single imam by ID.
+final imamByIdProvider =
+    StreamProvider.family<ImamModel?, String>((ref, imamId) {
+  if (imamId.isEmpty) return Stream.value(null);
+  return ref.watch(mosqueRepositoryProvider).watchImamById(imamId);
+});
+
+/// In-memory Map<String, MosqueModel> for O(1) synchronous lookups by ID across lists.
+final mosquesMapProvider = Provider<Map<String, MosqueModel>>((ref) {
+  final mosquesAsync = ref.watch(mosquesStreamProvider);
+  final list = mosquesAsync.asData?.value ?? [];
+  return {for (final m in list) m.id: m};
 });

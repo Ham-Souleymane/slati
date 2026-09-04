@@ -62,14 +62,12 @@ class _MosqueDetailsScreenState extends ConsumerState<MosqueDetailsScreen>
     } catch (_) {
       if (mounted) context.showSnackBar(context.tr('maps_launch_failed'), isError: true);
     }
-
   }
 
   Future<void> _share(MosqueModel mosque) async {
     await Clipboard.setData(ClipboardData(text: mosque.name));
     if (mounted) context.showSnackBar(context.tr('mosque_share_copied'));
   }
-
 
   Future<void> _toggleFollow(MosqueModel mosque, bool isFollowing) async {
     final isGuest = ref.read(isGuestProvider);
@@ -87,7 +85,6 @@ class _MosqueDetailsScreenState extends ConsumerState<MosqueDetailsScreen>
       await repo.followMosque(uid, mosque);
       if (mounted) context.showSnackBar(context.tr('mosque_follow_snack').replaceAll('{name}', mosque.name));
     }
-
   }
 
   Future<void> _toggleFollowImam(MosqueModel mosque, bool isFollowingImam) async {
@@ -106,7 +103,6 @@ class _MosqueDetailsScreenState extends ConsumerState<MosqueDetailsScreen>
       await repo.followImam(uid, mosque.imamId!);
       if (mounted) context.showSnackBar(context.tr('imam_follow_snack'));
     }
-
   }
 
   @override
@@ -136,7 +132,6 @@ class _MosqueDetailsScreenState extends ConsumerState<MosqueDetailsScreen>
           child: Text(context.tr('mosque_load_error'),
               style: GoogleFonts.tajawal(color: AppColors.grey700)),
         ),
-
       ),
       data: (mosque) {
         if (mosque == null) {
@@ -154,7 +149,6 @@ class _MosqueDetailsScreenState extends ConsumerState<MosqueDetailsScreen>
               child: Text(context.tr('mosque_not_found'),
                   style: GoogleFonts.tajawal(color: AppColors.grey700)),
             ),
-
           );
         }
 
@@ -164,38 +158,106 @@ class _MosqueDetailsScreenState extends ConsumerState<MosqueDetailsScreen>
             : const AsyncValue<bool>.data(false);
         final isFollowingImam = isFollowingImamAsync.asData?.value ?? false;
 
-        return Scaffold(
-          backgroundColor: AppColors.cream,
-          body: NestedScrollView(
-            headerSliverBuilder: (ctx, innerScrolled) => [
-              _MosqueSliverHeader(
-                mosque: mosque,
-                distanceKm: dist,
-                isGuest: isGuest,
-                onDirections: () => _openDirections(mosque),
-                onFollow: () => _toggleFollow(mosque, isFollowing),
-                onSave: () => context.go('/saved-mosques'),
-                onShare: () => _share(mosque),
-                isFollowing: isFollowing,
-                isFollowingImam: isFollowingImam,
-                onFollowImam: () => _toggleFollowImam(mosque, isFollowingImam),
-                prayerTimesAsync: prayerTimesAsync,
-                tabController: _tabController,
-              ),
-            ],
-            body: TabBarView(
-              controller: _tabController,
-              children: [
-                // Tab 0: المنشورات
-                _MosquePostsTab(mosqueId: mosque.id),
-                // Tab 1: أوقات الصلاة
-                _PrayerTimesTab(
-                  prayerTimesAsync: prayerTimesAsync,
-                  mosque: mosque,
+        return Directionality(
+          textDirection: TextDirection.rtl,
+          child: Scaffold(
+            backgroundColor: const Color(0xFFF0F3FF),
+            body: NestedScrollView(
+              headerSliverBuilder: (ctx, innerScrolled) => [
+                // 1. Cover Photo AppBar
+                SliverAppBar(
+                  expandedHeight: 200,
+                  pinned: true,
+                  backgroundColor: AppColors.emeraldDark,
+                  leading: IconButton(
+                    icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
+                    onPressed: () => context.canPop() ? context.pop() : context.go('/home'),
+                  ),
+                  actions: [
+                    IconButton(
+                      icon: const Icon(Icons.share_rounded, color: Colors.white),
+                      onPressed: () => _share(mosque),
+                      tooltip: context.tr('share'),
+                    ),
+                  ],
+                  flexibleSpace: FlexibleSpaceBar(
+                    title: innerScrolled
+                        ? Text(
+                            mosque.name,
+                            style: GoogleFonts.tajawal(
+                              fontWeight: FontWeight.w700,
+                              fontSize: 16,
+                              color: Colors.white,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          )
+                        : null,
+                    background: _CoverPhoto(mosque: mosque),
+                  ),
                 ),
-                // Tab 2: عن المسجد
-                _AboutTab(mosque: mosque),
+
+                // 2. Mosque Info Card (Name, address, actions, mini prayer times)
+                SliverToBoxAdapter(
+                  child: Container(
+                    color: Colors.white,
+                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        _MosqueHeader(
+                          mosque: mosque,
+                          distanceKm: dist,
+                          onDirections: () => _openDirections(mosque),
+                          onFollow: () => _toggleFollow(mosque, isFollowing),
+                          onSave: () => context.go('/saved-mosques'),
+                          isFollowing: isFollowing,
+                          isFollowingImam: isFollowingImam,
+                          onFollowImam: () => _toggleFollowImam(mosque, isFollowingImam),
+                        ),
+                        const SizedBox(height: 12),
+                        _MiniPrayerCard(prayerTimesAsync: prayerTimesAsync),
+                      ],
+                    ),
+                  ),
+                ),
+
+                // 3. Pinned TabBar
+                SliverPersistentHeader(
+                  pinned: true,
+                  delegate: _SliverTabBarDelegate(
+                    TabBar(
+                      controller: _tabController,
+                      labelColor: AppColors.emeraldDark,
+                      unselectedLabelColor: AppColors.grey500,
+                      indicatorColor: AppColors.emerald,
+                      indicatorWeight: 3,
+                      labelStyle: GoogleFonts.tajawal(
+                          fontSize: 14, fontWeight: FontWeight.w700),
+                      unselectedLabelStyle:
+                          GoogleFonts.tajawal(fontSize: 14, fontWeight: FontWeight.w500),
+                      tabs: [
+                        Tab(text: context.tr('posts_tab')),
+                        Tab(text: context.tr('prayer_times_tab')),
+                        Tab(text: context.tr('about_mosque_tab')),
+                      ],
+                    ),
+                  ),
+                ),
               ],
+              body: TabBarView(
+                controller: _tabController,
+                children: [
+                  // Tab 0: المنشورات
+                  _MosquePostsTab(mosqueId: mosque.id),
+                  // Tab 1: أوقات الصلاة
+                  _PrayerTimesTab(
+                    prayerTimesAsync: prayerTimesAsync,
+                    mosque: mosque,
+                  ),
+                  // Tab 2: عن المسجد
+                  _AboutTab(mosque: mosque),
+                ],
+              ),
             ),
           ),
         );
@@ -204,118 +266,36 @@ class _MosqueDetailsScreenState extends ConsumerState<MosqueDetailsScreen>
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Sliver Header (cover + info + tabs)
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _MosqueSliverHeader extends StatelessWidget {
-  const _MosqueSliverHeader({
-    required this.mosque,
-    required this.distanceKm,
-    required this.isGuest,
-    required this.onDirections,
-    required this.onFollow,
-    required this.onSave,
-    required this.onShare,
-    required this.isFollowing,
-    required this.isFollowingImam,
-    required this.onFollowImam,
-    required this.prayerTimesAsync,
-    required this.tabController,
-  });
-
-  final MosqueModel mosque;
-  final double distanceKm;
-  final bool isGuest;
-  final bool isFollowing;
-  final bool isFollowingImam;
-  final VoidCallback onDirections;
-  final VoidCallback onFollow;
-  final VoidCallback onSave;
-  final VoidCallback onShare;
-  final VoidCallback onFollowImam;
-  final AsyncValue<MosquePrayerTimes?> prayerTimesAsync;
-  final TabController tabController;
+class _SliverTabBarDelegate extends SliverPersistentHeaderDelegate {
+  _SliverTabBarDelegate(this.tabBar);
+  final TabBar tabBar;
 
   @override
-  Widget build(BuildContext context) {
-    return SliverAppBar(
-      expandedHeight: 260,
-      pinned: true,
-      floating: false,
-      backgroundColor: AppColors.emeraldDark,
-      leading: IconButton(
-        icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
-        onPressed: () => context.canPop() ? context.pop() : context.go('/home'),
-      ),
-      actions: [
-        IconButton(
-          icon: const Icon(Icons.share_rounded, color: Colors.white),
-          onPressed: onShare,
-          tooltip: context.tr('share'),
-        ),
+  double get minExtent => tabBar.preferredSize.height;
+  @override
+  double get maxExtent => tabBar.preferredSize.height;
 
-      ],
-      flexibleSpace: FlexibleSpaceBar(
-        collapseMode: CollapseMode.parallax,
-        background: _CoverPhoto(mosque: mosque),
+  @override
+  Widget build(
+      BuildContext context, double shrinkOffset, bool overlapsContent) {
+    return Container(
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        border: Border(bottom: BorderSide(color: Color(0xFFDDE3F0), width: 0.5)),
       ),
-      bottom: PreferredSize(
-        preferredSize: const Size.fromHeight(220),
-        child: Container(
-          decoration: const BoxDecoration(
-            color: AppColors.cream,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-          ),
-          child: Column(
-            children: [
-              const SizedBox(height: 16),
-              // Name + badges
-               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: _MosqueHeader(
-                  mosque: mosque,
-                  distanceKm: distanceKm,
-                  onDirections: onDirections,
-                  onFollow: onFollow,
-                  onSave: onSave,
-                  isFollowing: isFollowing,
-                  isFollowingImam: isFollowingImam,
-                  onFollowImam: onFollowImam,
-                ),
-              ),
-              const SizedBox(height: 12),
-              // Mini prayer times card
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: _MiniPrayerCard(prayerTimesAsync: prayerTimesAsync),
-              ),
-              const SizedBox(height: 8),
-              // Tabs
-              TabBar(
-                controller: tabController,
-                labelColor: AppColors.emeraldDark,
-                unselectedLabelColor: AppColors.grey500,
-                indicatorColor: AppColors.emerald,
-                indicatorWeight: 3,
-                labelStyle: GoogleFonts.tajawal(
-                    fontSize: 14, fontWeight: FontWeight.w700),
-                unselectedLabelStyle:
-                    GoogleFonts.tajawal(fontSize: 14, fontWeight: FontWeight.w500),
-                tabs: [
-                  Tab(text: context.tr('posts_tab')),
-                  Tab(text: context.tr('prayer_times_tab')),
-                  Tab(text: context.tr('about_mosque_tab')),
-                ],
-
-              ),
-            ],
-          ),
-        ),
-      ),
+      child: tabBar,
     );
   }
+
+  @override
+  bool shouldRebuild(_SliverTabBarDelegate oldDelegate) {
+    return false;
+  }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Cover Photo
+// ─────────────────────────────────────────────────────────────────────────────
 
 class _CoverPhoto extends StatelessWidget {
   const _CoverPhoto({required this.mosque});
@@ -365,6 +345,10 @@ class _CoverPhoto extends StatelessWidget {
   }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Mosque Header Info
+// ─────────────────────────────────────────────────────────────────────────────
+
 class _MosqueHeader extends StatelessWidget {
   const _MosqueHeader({
     required this.mosque,
@@ -389,7 +373,7 @@ class _MosqueHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         // Name + verified
         Row(
@@ -403,7 +387,7 @@ class _MosqueHeader extends StatelessWidget {
                   fontWeight: FontWeight.w800,
                   color: AppColors.charcoal,
                 ),
-                textDirection: TextDirection.rtl,
+                textAlign: TextAlign.right,
               ),
             ),
             if (mosque.verified) ...[
@@ -414,7 +398,6 @@ class _MosqueHeader extends StatelessWidget {
                     color: AppColors.gold, size: 20),
               ),
             ],
-
           ],
         ),
         const SizedBox(height: 6),
@@ -429,7 +412,7 @@ class _MosqueHeader extends StatelessWidget {
                 mosque.address,
                 style: GoogleFonts.tajawal(
                     fontSize: 12, color: AppColors.grey700),
-                textDirection: TextDirection.rtl,
+                textAlign: TextAlign.right,
                 overflow: TextOverflow.ellipsis,
               ),
             ),
@@ -446,7 +429,6 @@ class _MosqueHeader extends StatelessWidget {
                   distanceKm < 1
                       ? '${(distanceKm * 1000).round()} ${context.tr('meters')}'
                       : '${distanceKm.toStringAsFixed(1)} ${context.tr('km')}',
-
                   style: GoogleFonts.tajawal(
                     fontSize: 11,
                     fontWeight: FontWeight.w700,
@@ -469,7 +451,6 @@ class _MosqueHeader extends StatelessWidget {
                 filled: true,
                 onTap: onDirections,
               ),
-
             ),
             const SizedBox(width: 8),
             Expanded(
@@ -480,7 +461,6 @@ class _MosqueHeader extends StatelessWidget {
                 filled: false,
                 onTap: onSave,
               ),
-
             ),
           ],
         ),
@@ -498,7 +478,6 @@ class _MosqueHeader extends StatelessWidget {
                 filled: isFollowing,
                 onTap: onFollow,
               ),
-
             ),
             if (mosque.imamId != null) ...[
               const SizedBox(width: 8),
@@ -512,7 +491,6 @@ class _MosqueHeader extends StatelessWidget {
                   filled: isFollowingImam,
                   onTap: onFollowImam,
                 ),
-
               ),
             ],
           ],
@@ -548,7 +526,7 @@ class _ActionBtn extends StatelessWidget {
           borderRadius: BorderRadius.circular(10),
         ),
         child: Row(
-          mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(icon,
                 size: 14, color: filled ? Colors.white : AppColors.grey700),
@@ -625,7 +603,6 @@ class _MiniPrayerCard extends StatelessWidget {
                     const Spacer(),
                     Text(
                       context.tr('imam_label').replaceAll('{name}', times.imamName!),
-
                       style: GoogleFonts.tajawal(
                           fontSize: 10, color: AppColors.grey500),
                     ),
@@ -658,9 +635,7 @@ class _MiniPrayerCard extends StatelessWidget {
                               ? AppColors.emerald
                               : AppColors.grey500,
                         ),
-                        textDirection: TextDirection.rtl,
                       ),
-
                       if (isNext)
                         Container(
                           margin: const EdgeInsets.only(top: 2),
@@ -709,9 +684,7 @@ class _MiniPrayerCard extends StatelessWidget {
             context.tr('no_times_today'),
             style: GoogleFonts.tajawal(
                 fontSize: 12, color: AppColors.grey700),
-            textDirection: TextDirection.rtl,
           ),
-
         ],
       ),
     );
@@ -739,7 +712,6 @@ class _PrayerTimesTab extends StatelessWidget {
         child: Text(context.tr('prayer_times_error'),
             style: GoogleFonts.tajawal(color: AppColors.grey700)),
       ),
-
       data: (times) {
         if (times == null) {
           return Center(
@@ -753,15 +725,12 @@ class _PrayerTimesTab extends StatelessWidget {
                   context.tr('no_prayer_times_today'),
                   style: GoogleFonts.tajawal(
                       fontSize: 15, color: AppColors.grey500),
-                  textDirection: TextDirection.rtl,
                 ),
                 const SizedBox(height: 4),
                 Text(
                   context.tr('imam_updates_daily'),
-
                   style: GoogleFonts.tajawal(
                       fontSize: 12, color: AppColors.grey300),
-                  textDirection: TextDirection.rtl,
                 ),
               ],
             ),
@@ -799,7 +768,6 @@ class _PrayerTimesTab extends StatelessWidget {
                       fontSize: 11, color: AppColors.grey500),
                 ),
               ),
-
             ],
           ],
         );
@@ -845,26 +813,32 @@ class _PrayerRow extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Text(
-            time,
-            style: GoogleFonts.tajawal(
-              fontSize: 16,
-              fontWeight: FontWeight.w700,
-              color: isNext
-                  ? AppColors.gold
-                  : isPast
-                      ? AppColors.grey300
-                      : AppColors.charcoal,
-              letterSpacing: 0.5,
-            ),
-          ),
-          const Spacer(),
           Row(
             mainAxisSize: MainAxisSize.min,
             children: [
+              Icon(
+                isPast
+                    ? Icons.check_circle_rounded
+                    : Icons.radio_button_unchecked_rounded,
+                size: 16,
+                color: isPast ? AppColors.success : AppColors.grey300,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                context.tr(name),
+                style: GoogleFonts.tajawal(
+                  fontSize: 16,
+                  fontWeight: isNext ? FontWeight.w800 : FontWeight.w600,
+                  color: isNext
+                      ? Colors.white
+                      : isPast
+                          ? AppColors.grey300
+                          : AppColors.grey700,
+                ),
+              ),
               if (isNext) ...[
+                const SizedBox(width: 8),
                 Container(
-                  margin: const EdgeInsets.only(left: 8),
                   padding:
                       const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                   decoration: BoxDecoration(
@@ -880,31 +854,22 @@ class _PrayerRow extends StatelessWidget {
                     ),
                   ),
                 ),
-
               ],
-              Text(
-                context.tr(name),
-                style: GoogleFonts.tajawal(
-                  fontSize: 16,
-                  fontWeight: isNext ? FontWeight.w800 : FontWeight.w600,
-                  color: isNext
-                      ? Colors.white
-                      : isPast
-                          ? AppColors.grey300
-
-                          : AppColors.grey700,
-                ),
-                textDirection: TextDirection.rtl,
-              ),
-              const SizedBox(width: 8),
-              Icon(
-                isPast
-                    ? Icons.check_circle_rounded
-                    : Icons.radio_button_unchecked_rounded,
-                size: 16,
-                color: isPast ? AppColors.success : AppColors.grey300,
-              ),
             ],
+          ),
+          const Spacer(),
+          Text(
+            time,
+            style: GoogleFonts.tajawal(
+              fontSize: 16,
+              fontWeight: FontWeight.w700,
+              color: isNext
+                  ? AppColors.gold
+                  : isPast
+                      ? AppColors.grey300
+                      : AppColors.charcoal,
+              letterSpacing: 0.5,
+            ),
           ),
         ],
       ),
@@ -923,8 +888,8 @@ class _JumuahCard extends StatelessWidget {
       decoration: BoxDecoration(
         gradient: const LinearGradient(
           colors: [AppColors.goldPale, Color(0xFFFFF8E1)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
+          begin: Alignment.topRight,
+          end: Alignment.bottomLeft,
         ),
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: AppColors.gold.withValues(alpha: 0.35)),
@@ -943,7 +908,6 @@ class _JumuahCard extends StatelessWidget {
                   fontWeight: FontWeight.w800,
                   color: AppColors.gold,
                 ),
-                textDirection: TextDirection.rtl,
               ),
               Text(
                 time,
@@ -963,7 +927,7 @@ class _JumuahCard extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Tab: Posts (placeholder)
+// Tab: Posts
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _MosquePostsTab extends ConsumerWidget {
@@ -976,6 +940,8 @@ class _MosquePostsTab extends ConsumerWidget {
     final isGuest = ref.watch(isGuestProvider);
     final savedIdsAsync = ref.watch(savedPostIdsProvider);
     final savedIds = savedIdsAsync.asData?.value ?? {};
+    final isFollowingAsync = ref.watch(isFollowingProvider(mosqueId));
+    final isFollowing = isFollowingAsync.asData?.value ?? false;
 
     return postsAsync.when(
       loading: () =>
@@ -987,7 +953,6 @@ class _MosquePostsTab extends ConsumerWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(context.tr('posts_load_failed'),
-
                   style: GoogleFonts.tajawal(
                       color: AppColors.grey700,
                       fontSize: 16,
@@ -1016,7 +981,6 @@ class _MosquePostsTab extends ConsumerWidget {
                     fontWeight: FontWeight.w700,
                     color: AppColors.grey500,
                   ),
-                  textDirection: TextDirection.rtl,
                 ),
               ],
             ),
@@ -1033,6 +997,7 @@ class _MosquePostsTab extends ConsumerWidget {
               post: post,
               isSaved: isSaved,
               isGuest: isGuest,
+              isFollowing: isFollowing,
               onSave: () => _toggleSave(context, ref, post, isSaved, isGuest),
               onTap: () => context.push('/post/${post.id}', extra: post),
             );
@@ -1058,7 +1023,6 @@ class _MosquePostsTab extends ConsumerWidget {
       await repo.savePost(uid, post);
       if (context.mounted) context.showSnackBar(context.tr('save_post_snack'));
     }
-
   }
 }
 
@@ -1114,7 +1078,6 @@ class _AboutTab extends StatelessWidget {
           ),
       ],
     );
-
   }
 }
 
@@ -1144,27 +1107,29 @@ class _InfoTile extends StatelessWidget {
         children: [
           Icon(icon, size: 18, color: AppColors.emerald),
           const SizedBox(width: 12),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                label,
-                style: GoogleFonts.tajawal(
-                    fontSize: 11, color: AppColors.grey500),
-              ),
-              Text(
-                value,
-                style: GoogleFonts.tajawal(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: valueColor ?? AppColors.charcoal,
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: GoogleFonts.tajawal(
+                      fontSize: 11, color: AppColors.grey500),
                 ),
-                textDirection: TextDirection.rtl,
-              ),
-            ],
+                Text(
+                  value,
+                  style: GoogleFonts.tajawal(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: valueColor ?? AppColors.charcoal,
+                  ),
+                ),
+              ],
+            ),
           ),
         ],
       ),
     );
   }
 }
+

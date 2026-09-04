@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:manbar_almasjid/main.dart';
+import 'package:slati/main.dart';
 
 void main() {
   testWidgets('App widget instantiation test', (WidgetTester tester) async {
