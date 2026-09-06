@@ -1,16 +1,22 @@
 package com.slatk.slatkapp
 
 import android.app.AlarmManager
+import android.app.NotificationChannel
+import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.util.Log
+import androidx.core.app.NotificationCompat
 import java.util.Calendar
 
 object AdhanScheduler {
     private const val TAG = "AdhanScheduler"
     const val PREFS_NAME = "slati_adhan_prefs"
+    const val ONGOING_CHANNEL_ID = "prayer_status_ongoing_v2"
+    const val ONGOING_NOTIFICATION_ID = 777
+    const val ONGOING_ALARM_REQUEST_CODE = 7770
 
     private val prayerCodes = mapOf(
         "الفجر" to 101,
@@ -194,37 +200,34 @@ object AdhanScheduler {
         val targetDate = java.util.Date(triggerAtMillis)
 
         // -----------------------------------------------------------------------
-        // STRATEGY: Use setAlarmClock() with TWO separate PendingIntents:
+        // STRATEGY: Use setAlarmClock() with BroadcastReceiver as operation:
         //
-        //   1. activityPendingIntent (PendingIntent.getActivity) is passed as
-        //      BOTH the AlarmClockInfo "showIntent" AND the alarm operation.
-        //      This ensures Android grants the app the Background Activity Launch
-        //      (BAL) exemption, so AdhanRingingActivity can show over the lock
-        //      screen even when the app is killed.
+        //   1. receiverPendingIntent (PendingIntent.getBroadcast) is the alarm
+        //      operation for setAlarmClock(). BroadcastReceivers are NEVER blocked
+        //      by Android's Background Activity Launch (BAL) restrictions, waking
+        //      the CPU at the exact millisecond.
         //
-        //   2. receiverPendingIntent (PendingIntent.getBroadcast) is scheduled
-        //      via a *separate* setAndAllowWhileIdle alarm at the same time.
-        //      This fires AdhanAlarmReceiver to play audio via the foreground
-        //      service and post the fullScreenIntent notification as a fallback.
+        //   2. activityPendingIntent is passed to AlarmClockInfo as "showIntent"
+        //      so the user can tap the alarm indicator to see prayer details.
         //
-        // This dual-alarm approach ensures:
-        //   - Screen wake-up via the privileged AlarmClock Activity launch (1)
-        //   - Audio playback + notification via the BroadcastReceiver (2)
+        //   3. backupReceiverPendingIntent is scheduled via setExactAndAllowWhileIdle()
+        //      (NEVER inexact setAndAllowWhileIdle, which delays alarms by 4-9 mins in Doze).
         // -----------------------------------------------------------------------
         val activityPendingIntent = buildActivityPendingIntent(context, requestCode, prayerName, timeStr, soundName)
         val receiverPendingIntent = buildReceiverPendingIntent(context, requestCode + 1000, prayerName, timeStr, soundName)
+        val backupReceiverPendingIntent = buildReceiverPendingIntent(context, requestCode + 2000, prayerName, timeStr, soundName)
 
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                // Primary: AlarmClock with Activity as operation → guaranteed BAL exemption
+                // Primary: AlarmClock with BroadcastReceiver operation → fires at exact second, Doze-exempt
                 val alarmClockInfo = AlarmManager.AlarmClockInfo(triggerAtMillis, activityPendingIntent)
-                alarmManager.setAlarmClock(alarmClockInfo, activityPendingIntent)
-                Log.d(TAG, "Scheduled AlarmClock (Activity operation) for $prayerName at $targetDate (sound=$soundName)")
+                alarmManager.setAlarmClock(alarmClockInfo, receiverPendingIntent)
+                Log.d(TAG, "Scheduled AlarmClock (Receiver operation) for $prayerName at $targetDate (sound=$soundName)")
 
-                // Secondary: Broadcast for audio/notification at the same time
+                // Secondary: Backup exact alarm (setExactAndAllowWhileIdle ensures no Doze batching delay)
                 try {
-                    alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAtMillis, receiverPendingIntent)
-                    Log.d(TAG, "Scheduled secondary receiver alarm for $prayerName at $targetDate")
+                    alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAtMillis, backupReceiverPendingIntent)
+                    Log.d(TAG, "Scheduled secondary exact receiver alarm for $prayerName at $targetDate")
                 } catch (e: Exception) {
                     Log.w(TAG, "Secondary receiver alarm failed for $prayerName: ${e.message}")
                 }
@@ -237,7 +240,7 @@ object AdhanScheduler {
             Log.w(TAG, "Exact alarm permission denied for $prayerName, falling back: ${se.message}")
             try {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                    alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAtMillis, activityPendingIntent)
+                    alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAtMillis, receiverPendingIntent)
                 } else {
                     alarmManager.set(AlarmManager.RTC_WAKEUP, triggerAtMillis, receiverPendingIntent)
                 }
@@ -247,6 +250,11 @@ object AdhanScheduler {
         } catch (e: Exception) {
             Log.e(TAG, "Failed to schedule alarm for $prayerName: ${e.message}", e)
         }
+
+        // Keep the ongoing persistent prayer notification updated whenever prayer times change
+        try {
+            updateOngoingPrayerNotification(context)
+        } catch (_: Exception) {}
     }
 
 
@@ -262,10 +270,18 @@ object AdhanScheduler {
             alarmManager.cancel(activityPi)
         } catch (_: Exception) {}
 
+        // Cancel the receiver alarm (operation for AlarmClock)
         try {
             val receiverIntent = Intent(context, AdhanAlarmReceiver::class.java)
             val receiverPi = PendingIntent.getBroadcast(context, requestCode + 1000, receiverIntent, flags)
             alarmManager.cancel(receiverPi)
+        } catch (_: Exception) {}
+
+        // Cancel the secondary backup exact receiver alarm
+        try {
+            val backupIntent = Intent(context, AdhanAlarmReceiver::class.java)
+            val backupPi = PendingIntent.getBroadcast(context, requestCode + 2000, backupIntent, flags)
+            alarmManager.cancel(backupPi)
         } catch (_: Exception) {}
 
         // Also cancel old-style alarm that used requestCode for broadcast (legacy cleanup)
@@ -278,6 +294,10 @@ object AdhanScheduler {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         prefs.edit().putBoolean("enabled_$prayerName", false).apply()
         Log.d(TAG, "Cancelled alarm for $prayerName")
+
+        try {
+            updateOngoingPrayerNotification(context)
+        } catch (_: Exception) {}
     }
 
     fun scheduleTestAlarmInOneMinute(context: Context, testSound: String? = null) {
@@ -292,17 +312,18 @@ object AdhanScheduler {
 
         val activityPendingIntent = buildActivityPendingIntent(context, requestCode, "تجربة الأذان", "الآن", soundName, isTest = true)
         val receiverPendingIntent = buildReceiverPendingIntent(context, requestCode + 1000, "تجربة الأذان", "الآن", soundName, isTest = true)
+        val backupReceiverPendingIntent = buildReceiverPendingIntent(context, requestCode + 2000, "تجربة الأذان", "الآن", soundName, isTest = true)
 
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                // Primary: AlarmClock with Activity as operation → screen wake-up guaranteed
+                // Primary: AlarmClock with BroadcastReceiver operation → fires at exact second, Doze-exempt
                 val alarmClockInfo = AlarmManager.AlarmClockInfo(triggerAtMillis, activityPendingIntent)
-                alarmManager.setAlarmClock(alarmClockInfo, activityPendingIntent)
-                Log.d(TAG, "Scheduled 1-min test AlarmClock (Activity operation, sound=$soundName)")
+                alarmManager.setAlarmClock(alarmClockInfo, receiverPendingIntent)
+                Log.d(TAG, "Scheduled 1-min test AlarmClock (Receiver operation, sound=$soundName)")
 
-                // Secondary: Broadcast for audio/notification
+                // Secondary: Backup exact alarm (setExactAndAllowWhileIdle ensures no Doze delay)
                 try {
-                    alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAtMillis, receiverPendingIntent)
+                    alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAtMillis, backupReceiverPendingIntent)
                     Log.d(TAG, "Scheduled 1-min secondary test receiver alarm")
                 } catch (e: Exception) {
                     Log.w(TAG, "Secondary test receiver alarm failed: ${e.message}")
@@ -315,7 +336,7 @@ object AdhanScheduler {
             Log.w(TAG, "Exact alarm permission denied for test, falling back: ${se.message}")
             try {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                    alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAtMillis, activityPendingIntent)
+                    alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAtMillis, receiverPendingIntent)
                 } else {
                     alarmManager.set(AlarmManager.RTC_WAKEUP, triggerAtMillis, receiverPendingIntent)
                 }
@@ -336,6 +357,154 @@ object AdhanScheduler {
             if (enabled && timeStr != null) {
                 schedulePrayer(context, prayerName, timeStr, sound)
             }
+        }
+        try {
+            updateOngoingPrayerNotification(context)
+        } catch (_: Exception) {}
+    }
+
+    fun createOngoingNotificationChannel(context: Context) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            val channel = NotificationChannel(
+                ONGOING_CHANNEL_ID,
+                "شريط مواقيت الصلاة المستمر",
+                NotificationManager.IMPORTANCE_LOW
+            ).apply {
+                description = "عرض التاريخ الهجري والصلاة القادمة والعداد التنازلي بشكل دائم في شريط الإشعارات"
+                setSound(null, null)
+                enableVibration(false)
+                setShowBadge(false)
+            }
+            manager.createNotificationChannel(channel)
+        }
+    }
+
+    fun cancelOngoingNotification(context: Context) {
+        try {
+            val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            nm.cancel(ONGOING_NOTIFICATION_ID)
+        } catch (_: Exception) {}
+
+        try {
+            val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+            val intent = Intent(context, AdhanAlarmReceiver::class.java).apply {
+                action = AdhanAlarmReceiver.ACTION_UPDATE_ONGOING
+            }
+            val pi = PendingIntent.getBroadcast(
+                context,
+                ONGOING_ALARM_REQUEST_CODE,
+                intent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+            alarmManager.cancel(pi)
+        } catch (_: Exception) {}
+    }
+
+    fun updateOngoingPrayerNotification(context: Context) {
+        try {
+            val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            val isEnabled = prefs.getBoolean("ongoing_enabled", true)
+            if (!isEnabled) {
+                cancelOngoingNotification(context)
+                return
+            }
+
+            val prayerNames = listOf("الفجر", "الظهر", "العصر", "المغرب", "العشاء")
+            var nextPrayerName: String? = null
+            var nextPrayerTime: String? = null
+            var minTriggerMillis = Long.MAX_VALUE
+
+            val now = System.currentTimeMillis()
+
+            for (name in prayerNames) {
+                val timeStr = prefs.getString("prayer_$name", null) ?: continue
+                val trigger = parsePrayerTimeToMillis(name, timeStr) ?: continue
+                // trigger is in the future (today or tomorrow)
+                if (trigger in (now + 1000L)..<minTriggerMillis) {
+                    minTriggerMillis = trigger
+                    nextPrayerName = name
+                    nextPrayerTime = timeStr
+                }
+            }
+
+            if (nextPrayerName == null || nextPrayerTime == null || minTriggerMillis == Long.MAX_VALUE) {
+                Log.w(TAG, "No valid prayer times available to update ongoing notification")
+                return
+            }
+
+            createOngoingNotificationChannel(context)
+
+            val cityName = prefs.getString("city_name", "") ?: ""
+            val cityDisplay = if (cityName.isNotEmpty()) cityName else "مواقيت الصلاة"
+            val title = "🕌 الصلاة القادمة: $nextPrayerName ($nextPrayerTime)"
+            val body = "صلاة $nextPrayerName: $nextPrayerTime • $cityDisplay"
+
+            val openAppIntent = context.packageManager.getLaunchIntentForPackage(context.packageName)?.apply {
+                flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                putExtra("route", "prayer_times")
+            }
+            val contentPendingIntent = if (openAppIntent != null) {
+                PendingIntent.getActivity(
+                    context,
+                    ONGOING_NOTIFICATION_ID,
+                    openAppIntent,
+                    PendingIntent.FLAG_UPDATE_CURRENT or (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) PendingIntent.FLAG_IMMUTABLE else 0)
+                )
+            } else null
+
+            val bigText = "⏳ الوقت المتبقي حتى الأذان قيد العد التنازلي ⏱️\n" +
+                    "🕌 الصلاة القادمة: $nextPrayerName في تمام الساعة $nextPrayerTime\n" +
+                    "📍 $cityDisplay"
+
+            val notification = NotificationCompat.Builder(context, ONGOING_CHANNEL_ID)
+                .setContentTitle(title)
+                .setContentText(body)
+                .setSmallIcon(R.mipmap.ic_launcher)
+                .setContentIntent(contentPendingIntent)
+                .setOngoing(true)
+                .setAutoCancel(false)
+                .setOnlyAlertOnce(true)
+                .setPriority(NotificationCompat.PRIORITY_HIGH)
+                .setCategory(NotificationCompat.CATEGORY_STATUS)
+                .setColor(0xFF1B5E20.toInt())
+                .setSilent(true)
+                .setShowWhen(true)
+                .setWhen(minTriggerMillis)
+                .setUsesChronometer(true)
+                .setChronometerCountDown(true)
+                .setSubText(cityDisplay)
+                .setStyle(NotificationCompat.BigTextStyle().bigText(bigText))
+                .build()
+
+            val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            nm.notify(ONGOING_NOTIFICATION_ID, notification)
+            Log.d(TAG, "Updated native ongoing prayer notification for $nextPrayerName at $nextPrayerTime (triggers in ${minTriggerMillis - now}ms)")
+
+            // Schedule an exact alarm to rollover to the next prayer as soon as this one passes
+            try {
+                val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+                val refreshIntent = Intent(context, AdhanAlarmReceiver::class.java).apply {
+                    action = AdhanAlarmReceiver.ACTION_UPDATE_ONGOING
+                }
+                val refreshPi = PendingIntent.getBroadcast(
+                    context,
+                    ONGOING_ALARM_REQUEST_CODE,
+                    refreshIntent,
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                )
+
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                    alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, minTriggerMillis + 1500L, refreshPi)
+                } else {
+                    alarmManager.set(AlarmManager.RTC_WAKEUP, minTriggerMillis + 1500L, refreshPi)
+                }
+                Log.d(TAG, "Scheduled ongoing notification rollover alarm for ${java.util.Date(minTriggerMillis + 1500L)}")
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to schedule ongoing notification rollover alarm: ${e.message}")
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error in updateOngoingPrayerNotification: ${e.message}", e)
         }
     }
 }

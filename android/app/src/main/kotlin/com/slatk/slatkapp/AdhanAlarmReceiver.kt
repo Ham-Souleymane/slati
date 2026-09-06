@@ -21,9 +21,10 @@ import java.io.FileOutputStream
 class AdhanAlarmReceiver : BroadcastReceiver() {
     companion object {
         private const val TAG = "AdhanAlarmReceiver"
-        const val CHANNEL_ID = "adhan_alarm_ring_v5"
+        const val CHANNEL_ID = "adhan_alarm_ring_v6"
         const val NOTIFICATION_ID = 8888
         const val ACTION_STOP_ADHAN = "com.slatk.slatkapp.STOP_ADHAN"
+        const val ACTION_UPDATE_ONGOING = "com.slatk.slatkapp.UPDATE_ONGOING"
 
         private var wakeLock: PowerManager.WakeLock? = null
         private var screenWakeLock: PowerManager.WakeLock? = null
@@ -99,20 +100,14 @@ class AdhanAlarmReceiver : BroadcastReceiver() {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
-                // Clean up any stale channels from earlier versions to force high importance
+                // Clean up any stale channels from earlier versions
                 try {
                     manager.deleteNotificationChannel("adhan_alarm_playback_channel")
                     manager.deleteNotificationChannel("adhan_alarm_playback_channel_v2")
                     manager.deleteNotificationChannel("adhan_alarm_playback_channel_v3")
+                    manager.deleteNotificationChannel("adhan_alarm_ring_v4")
+                    manager.deleteNotificationChannel("adhan_alarm_ring_v5")
                 } catch (_: Exception) {}
-
-                val soundUri = android.media.RingtoneManager.getDefaultUri(android.media.RingtoneManager.TYPE_ALARM)
-                    ?: android.media.RingtoneManager.getDefaultUri(android.media.RingtoneManager.TYPE_NOTIFICATION)
-
-                val audioAttributes = AudioAttributes.Builder()
-                    .setUsage(AudioAttributes.USAGE_ALARM)
-                    .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-                    .build()
 
                 val channel = NotificationChannel(
                     CHANNEL_ID,
@@ -120,7 +115,8 @@ class AdhanAlarmReceiver : BroadcastReceiver() {
                     NotificationManager.IMPORTANCE_HIGH
                 ).apply {
                     description = "تشغيل صوت الأذان وعرض واجهة الصلاة فوق شاشة القفل"
-                    setSound(soundUri, audioAttributes)
+                    // setSound to null: The Adhan is played cleanly by MediaPlayer, avoiding double alarm audio
+                    setSound(null, null)
                     enableVibration(true)
                     vibrationPattern = longArrayOf(0, 500, 250, 500)
                     lockscreenVisibility = Notification.VISIBILITY_PUBLIC
@@ -165,8 +161,6 @@ class AdhanAlarmReceiver : BroadcastReceiver() {
             )
 
             val timeSub = if (prayerTime.isNotEmpty()) " ($prayerTime)" else ""
-            val soundUri = android.media.RingtoneManager.getDefaultUri(android.media.RingtoneManager.TYPE_ALARM)
-                ?: android.media.RingtoneManager.getDefaultUri(android.media.RingtoneManager.TYPE_NOTIFICATION)
 
             return NotificationCompat.Builder(context, CHANNEL_ID)
                 .setContentTitle("🕌 حان الآن وقت $prayerName$timeSub")
@@ -174,7 +168,7 @@ class AdhanAlarmReceiver : BroadcastReceiver() {
                 .setSmallIcon(R.mipmap.ic_launcher)
                 .setContentIntent(ringingPendingIntent)
                 .setFullScreenIntent(ringingPendingIntent, true)
-                .setSound(soundUri, AudioManager.STREAM_ALARM)
+                .setSound(null)
                 .setPriority(NotificationCompat.PRIORITY_MAX)
                 .setCategory(NotificationCompat.CATEGORY_ALARM)
                 .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
@@ -321,6 +315,12 @@ class AdhanAlarmReceiver : BroadcastReceiver() {
     }
 
     override fun onReceive(context: Context, intent: Intent) {
+        if (intent.action == ACTION_UPDATE_ONGOING) {
+            Log.d(TAG, "AdhanAlarmReceiver: ACTION_UPDATE_ONGOING received, updating ongoing prayer status")
+            AdhanScheduler.updateOngoingPrayerNotification(context)
+            return
+        }
+
         val prayerName = intent.getStringExtra("prayer_name") ?: "الصلاة"
         val prayerTime = intent.getStringExtra("prayer_time") ?: ""
         val adhanSound = intent.getStringExtra("adhan_sound")
@@ -330,20 +330,12 @@ class AdhanAlarmReceiver : BroadcastReceiver() {
         Log.d(TAG, "AdhanAlarmReceiver triggered for: $prayerName ($prayerTime), sound=$adhanSound, isTest=$isTest")
         Log.d(TAG, "=================================================")
 
-        // 1. Keep CPU alive during processing
+        // 1. Keep CPU and screen alive during processing
         acquireWakeLock(context, 30_000L)
-
-        // NOTE: On Android 12+ (API 31+), startActivity() from a BroadcastReceiver is
-        // BLOCKED unless the app has a visible window or is granted a BAL exemption.
-        // The activity launch is now handled by AlarmManager.setAlarmClock() using an
-        // Activity PendingIntent as the operation — this gives the system-granted BAL
-        // exemption. We do NOT attempt startActivity() here to avoid crashes/silently
-        // dropped launches on Samsung One UI and other OEM ROMs.
+        acquireScreenWakeLock(context)
 
         // 2. Post lockscreen notification with fullScreenIntent.
-        //    On Android 12+ this is the SECONDARY mechanism (the alarm clock activity
-        //    launch is primary). The fullScreenIntent here acts as a fallback in case
-        //    the alarm clock PendingIntent did not fire the activity (e.g. DND mode).
+        //    fullScreenIntent is the official Android mechanism for alarm and incoming call screens.
         try {
             val notification = buildAlarmNotification(context, prayerName, prayerTime, adhanSound)
             val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
@@ -351,6 +343,22 @@ class AdhanAlarmReceiver : BroadcastReceiver() {
             Log.d(TAG, "Adhan lockscreen notification posted successfully")
         } catch (e: Exception) {
             Log.e(TAG, "Error posting notification: ${e.message}", e)
+        }
+
+        // Try direct activity launch if allowed by system state
+        try {
+            val activityIntent = Intent(context, AdhanRingingActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or
+                        Intent.FLAG_ACTIVITY_CLEAR_TOP or
+                        Intent.FLAG_ACTIVITY_SINGLE_TOP
+                putExtra("prayer_name", prayerName)
+                putExtra("prayer_time", prayerTime)
+                putExtra("adhan_sound", adhanSound)
+                if (isTest) putExtra("is_test", true)
+            }
+            context.startActivity(activityIntent)
+        } catch (e: Exception) {
+            Log.d(TAG, "Direct activity launch: ${e.message} (handled by fullScreenIntent)")
         }
 
         // 3. Start foreground service to play audio and maintain wake lock
@@ -393,6 +401,13 @@ class AdhanAlarmReceiver : BroadcastReceiver() {
             } catch (e: Exception) {
                 Log.e(TAG, "Error rescheduling for tomorrow: ${e.message}", e)
             }
+        }
+
+        // 6. Update ongoing countdown notification to point to the next prayer
+        if (!isTest) {
+            try {
+                AdhanScheduler.updateOngoingPrayerNotification(context)
+            } catch (_: Exception) {}
         }
     }
 }

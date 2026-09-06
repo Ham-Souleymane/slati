@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -191,6 +192,27 @@ class NotificationService {
 
     _initialized = true;
     debugPrint('[NotificationService] Initialized with Adhan Sound channels, Ongoing channel and Timezones');
+
+    // Restore and display ongoing prayer notification immediately from cache (works 100% offline)
+    try {
+      final sp = await SharedPreferences.getInstance();
+      final cachedJson = sp.getString('last_known_prayer_times') ?? sp.getString('prayer_times_cache');
+      final cachedCity = sp.getString('last_known_city_name');
+      if (cachedJson != null) {
+        final decoded = json.decode(cachedJson);
+        if (decoded is Map<String, dynamic>) {
+          final times = PrayerTimes.fromJson(decoded);
+          _cachedTimes = times;
+          _cachedCityName = cachedCity;
+          final enabled = sp.getBool('ongoing_prayer_notification') ?? true;
+          if (enabled) {
+            updateOngoingPrayerStatus(times: times, cityName: cachedCity);
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('[NotificationService] Error restoring ongoing status on init: $e');
+    }
   }
 
   /// Parses a time string (e.g. "05:24", "5:24", "05:24 (EET)", "04:30 م") into a local [DateTime].
@@ -671,12 +693,16 @@ class NotificationService {
     // Synchronize native Android scheduler
     if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
       try {
+        final cityName = _cachedCityName ?? sp.getString('last_known_city_name');
+        final ongoingEnabled = sp.getBool('ongoing_prayer_notification') ?? true;
         await _nativeChannel.invokeMethod('scheduleAll', {
           'prayers': prayersMap,
           'enabled': enabledMap,
           'sounds': soundsMap,
+          'cityName': cityName,
+          'ongoingEnabled': ongoingEnabled,
         });
-        debugPrint('[NotificationService] Native Android synced all prayer alarms with custom sounds');
+        debugPrint('[NotificationService] Native Android synced all prayer alarms and ongoing status');
       } catch (e) {
         debugPrint('[NotificationService] Native Android scheduleAll error: $e');
       }
@@ -778,14 +804,14 @@ class NotificationService {
     if (next != null) {
       nextPrayerName = next.key;
       nextPrayerTime = next.value;
-      nextDt = parseTimeToDateTime(next.value, now);
+      nextDt = parseTimeToDateTime(next.value, now, nextPrayerName);
       if (nextDt != null && nextDt.isBefore(now)) {
         nextDt = nextDt.add(const Duration(days: 1));
       }
     } else {
       nextPrayerName = 'الفجر';
       nextPrayerTime = times.fajr;
-      nextDt = parseTimeToDateTime(times.fajr, now.add(const Duration(days: 1)));
+      nextDt = parseTimeToDateTime(times.fajr, now.add(const Duration(days: 1)), 'الفجر');
     }
 
     final cityDisplay = _cachedCityName ?? cityName;
@@ -843,6 +869,23 @@ class NotificationService {
     } catch (e) {
       debugPrint('[NotificationService] updateOngoingPrayerStatus error: $e');
     }
+
+    // Also synchronize native Android ongoing status so it stays alive offline and in background
+    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
+      try {
+        _nativeChannel.invokeMethod('updateOngoingStatus', {
+          'prayers': {
+            'الفجر': times.fajr,
+            'الظهر': times.dhuhr,
+            'العصر': times.asr,
+            'المغرب': times.maghrib,
+            'العشاء': times.isha,
+          },
+          'cityName': cityDisplay,
+          'enabled': enabled,
+        }).catchError((_) {});
+      } catch (_) {}
+    }
   }
 
   /// Dismisses the persistent ongoing prayer notification.
@@ -854,6 +897,12 @@ class NotificationService {
       debugPrint('[NotificationService] Cancelled ongoing prayer notification');
     } catch (e) {
       debugPrint('[NotificationService] cancelOngoingPrayerStatus error: $e');
+    }
+
+    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
+      try {
+        _nativeChannel.invokeMethod('cancelOngoingStatus').catchError((_) {});
+      } catch (_) {}
     }
   }
 

@@ -72,13 +72,49 @@ class MosquePrayerTimes {
         MapEntry('العشاء', isha),
       ];
 
-  static DateTime? timeToDateTime(String timeStr, DateTime reference) {
-    final parts = timeStr.split(':');
-    if (parts.length < 2) return null;
-    final hour = int.tryParse(parts[0]);
-    final minute = int.tryParse(parts[1]);
-    if (hour == null || minute == null) return null;
-    return DateTime(reference.year, reference.month, reference.day, hour, minute);
+  static DateTime? timeToDateTime(String timeStr, DateTime reference, [String? prayerName]) {
+    try {
+      final clean = timeStr
+          .replaceAll('\u200e', '')
+          .replaceAll('\u200f', '')
+          .replaceAll('\u061c', '')
+          .replaceAll('\u00a0', ' ')
+          .trim();
+      final isPM = clean.contains('م') || clean.toUpperCase().contains('PM');
+      final isAM = clean.contains('ص') || clean.toUpperCase().contains('AM');
+
+      final normalized = clean.replaceAllMapped(RegExp(r'[٠-٩۰-۹]'), (m) {
+        final code = m.group(0)!.codeUnitAt(0);
+        if (code >= 0x0660 && code <= 0x0669) {
+          return String.fromCharCode(code - 0x0660 + 0x30);
+        } else if (code >= 0x06F0 && code <= 0x06F9) {
+          return String.fromCharCode(code - 0x06F0 + 0x30);
+        }
+        return m.group(0)!;
+      });
+
+      final match = RegExp(r'(\d{1,2})\s*:\s*(\d{1,2})').firstMatch(normalized);
+      if (match == null) return null;
+
+      var hour = int.tryParse(match.group(1)!);
+      final minute = int.tryParse(match.group(2)!);
+      if (hour == null || minute == null) return null;
+
+      if (isPM && hour < 12) {
+        hour += 12;
+      } else if (isAM && hour == 12) {
+        hour = 0;
+      } else if (!isPM && !isAM && prayerName != null) {
+        if (prayerName.contains('ظهر') && hour >= 1 && hour <= 10) hour += 12;
+        if (prayerName.contains('عصر') && hour < 12) hour += 12;
+        if (prayerName.contains('مغرب') && hour < 12) hour += 12;
+        if (prayerName.contains('عشاء') && hour < 12) hour += 12;
+      }
+
+      return DateTime(reference.year, reference.month, reference.day, hour, minute);
+    } catch (_) {
+      return null;
+    }
   }
 
   MapEntry<String, String>? nextPrayer(DateTime now) {
@@ -90,7 +126,7 @@ class MosquePrayerTimes {
       MapEntry('العشاء', isha),
     ];
     for (final entry in salawat) {
-      final dt = timeToDateTime(entry.value, now);
+      final dt = timeToDateTime(entry.value, now, entry.key);
       if (dt != null && dt.isAfter(now)) return entry;
     }
     return null;

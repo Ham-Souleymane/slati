@@ -656,7 +656,7 @@ class _FullPrayerTimesScreenState extends ConsumerState<FullPrayerTimesScreen> {
           padding: EdgeInsets.fromLTRB(16, 8, 16, MediaQuery.of(context).padding.bottom + 80),
           children: [
             ...times.allPrayers.map((entry) {
-              final dt = PrayerTimes.timeToDateTime(entry.value, _now);
+              final dt = PrayerTimes.timeToDateTime(entry.value, _now, entry.key);
               final isPast = dt != null && dt.isBefore(_now);
               final isNext = entry.key == next?.key;
 
@@ -730,7 +730,7 @@ class _FullPrayerTimesScreenState extends ConsumerState<FullPrayerTimesScreen> {
           padding: EdgeInsets.fromLTRB(16, 8, 16, MediaQuery.of(context).padding.bottom + 80),
           children: [
             ...times.allPrayers.map((entry) {
-              final dt = MosquePrayerTimes.timeToDateTime(entry.value, _now);
+              final dt = MosquePrayerTimes.timeToDateTime(entry.value, _now, entry.key);
               final isPast = dt != null && dt.isBefore(_now);
               final isNext = entry.key == next?.key;
 

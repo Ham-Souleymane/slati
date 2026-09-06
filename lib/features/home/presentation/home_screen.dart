@@ -610,9 +610,12 @@ class _NextPrayerHeroCardState extends State<_NextPrayerHeroCard> {
       final tomorrowFajr = NotificationService.parseTimeToDateTime(
         widget.times.fajr,
         _now.add(const Duration(days: 1)),
+        'الفجر',
       );
       if (tomorrowFajr != null) {
         remaining = tomorrowFajr.difference(_now);
+      } else {
+        remaining = widget.times.timeUntilNextPrayer(_now);
       }
       prayerName = 'الفجر';
       prayerTime = widget.times.fajr;

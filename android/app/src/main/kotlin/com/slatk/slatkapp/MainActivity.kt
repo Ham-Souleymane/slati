@@ -48,6 +48,17 @@ class MainActivity : FlutterActivity() {
                     val prayers = call.argument<Map<String, String>>("prayers")
                     val enabledMap = call.argument<Map<String, Boolean>>("enabled") ?: emptyMap()
                     val soundsMap = call.argument<Map<String, String>>("sounds") ?: emptyMap()
+                    val cityName = call.argument<String>("cityName")
+                    val ongoingEnabled = call.argument<Boolean>("ongoingEnabled") ?: true
+
+                    val prefs = getSharedPreferences(AdhanScheduler.PREFS_NAME, Context.MODE_PRIVATE)
+                    val editor = prefs.edit()
+                    if (cityName != null && cityName.isNotEmpty()) {
+                        editor.putString("city_name", cityName)
+                    }
+                    editor.putBoolean("ongoing_enabled", ongoingEnabled)
+                    editor.apply()
+
                     if (prayers != null) {
                         for ((name, time) in prayers) {
                             val isEnabled = enabledMap[name] ?: (name != "الشروق")
@@ -58,10 +69,42 @@ class MainActivity : FlutterActivity() {
                                 AdhanScheduler.cancelPrayer(applicationContext, name)
                             }
                         }
+                        try {
+                            AdhanScheduler.updateOngoingPrayerNotification(applicationContext)
+                        } catch (_: Exception) {}
                         result.success(true)
                     } else {
                         result.error("INVALID_ARGS", "prayers map required", null)
                     }
+                }
+                "updateOngoingStatus" -> {
+                    val prayers = call.argument<Map<String, String>>("prayers")
+                    val cityName = call.argument<String>("cityName")
+                    val enabled = call.argument<Boolean>("enabled") ?: true
+                    val prefs = getSharedPreferences(AdhanScheduler.PREFS_NAME, Context.MODE_PRIVATE)
+                    val editor = prefs.edit()
+                    if (cityName != null && cityName.isNotEmpty()) {
+                        editor.putString("city_name", cityName)
+                    }
+                    editor.putBoolean("ongoing_enabled", enabled)
+                    if (prayers != null) {
+                        for ((name, time) in prayers) {
+                            editor.putString("prayer_$name", time)
+                        }
+                    }
+                    editor.apply()
+                    try {
+                        AdhanScheduler.updateOngoingPrayerNotification(applicationContext)
+                    } catch (_: Exception) {}
+                    result.success(true)
+                }
+                "cancelOngoingStatus" -> {
+                    val prefs = getSharedPreferences(AdhanScheduler.PREFS_NAME, Context.MODE_PRIVATE)
+                    prefs.edit().putBoolean("ongoing_enabled", false).apply()
+                    try {
+                        AdhanScheduler.cancelOngoingNotification(applicationContext)
+                    } catch (_: Exception) {}
+                    result.success(true)
                 }
                 "setAdhanSound" -> {
                     val soundKey = call.argument<String>("soundKey") ?: "adhan_makkah"

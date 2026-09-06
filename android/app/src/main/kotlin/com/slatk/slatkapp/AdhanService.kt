@@ -25,7 +25,7 @@ import java.io.FileOutputStream
 class AdhanService : Service() {
     companion object {
         private const val TAG = "AdhanService"
-        const val CHANNEL_ID = "adhan_alarm_ring_v5"
+        const val CHANNEL_ID = "adhan_alarm_ring_v6"
         const val NOTIFICATION_ID = 8888
         const val ACTION_STOP_ADHAN = "com.slatk.slatkapp.STOP_ADHAN"
 
@@ -40,15 +40,9 @@ class AdhanService : Service() {
                     manager.deleteNotificationChannel("adhan_alarm_playback_channel")
                     manager.deleteNotificationChannel("adhan_alarm_playback_channel_v2")
                     manager.deleteNotificationChannel("adhan_alarm_playback_channel_v3")
+                    manager.deleteNotificationChannel("adhan_alarm_ring_v4")
+                    manager.deleteNotificationChannel("adhan_alarm_ring_v5")
                 } catch (_: Exception) {}
-
-                val soundUri = android.media.RingtoneManager.getDefaultUri(android.media.RingtoneManager.TYPE_ALARM)
-                    ?: android.media.RingtoneManager.getDefaultUri(android.media.RingtoneManager.TYPE_NOTIFICATION)
-
-                val audioAttributes = AudioAttributes.Builder()
-                    .setUsage(AudioAttributes.USAGE_ALARM)
-                    .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-                    .build()
 
                 val channel = NotificationChannel(
                     CHANNEL_ID,
@@ -56,7 +50,8 @@ class AdhanService : Service() {
                     NotificationManager.IMPORTANCE_HIGH
                 ).apply {
                     description = "تشغيل صوت الأذان وعرض واجهة الصلاة فوق شاشة القفل"
-                    setSound(soundUri, audioAttributes)
+                    // setSound to null: The Adhan is played cleanly by MediaPlayer, avoiding double alarm audio
+                    setSound(null, null)
                     enableVibration(true)
                     vibrationPattern = longArrayOf(0, 500, 250, 500)
                     lockscreenVisibility = Notification.VISIBILITY_PUBLIC
@@ -101,8 +96,6 @@ class AdhanService : Service() {
             )
 
             val timeSub = if (prayerTime.isNotEmpty()) " ($prayerTime)" else ""
-            val soundUri = android.media.RingtoneManager.getDefaultUri(android.media.RingtoneManager.TYPE_ALARM)
-                ?: android.media.RingtoneManager.getDefaultUri(android.media.RingtoneManager.TYPE_NOTIFICATION)
 
             return NotificationCompat.Builder(context, CHANNEL_ID)
                 .setContentTitle("🕌 حان الآن وقت $prayerName$timeSub")
@@ -110,7 +103,7 @@ class AdhanService : Service() {
                 .setSmallIcon(R.mipmap.ic_launcher)
                 .setContentIntent(ringingPendingIntent)
                 .setFullScreenIntent(ringingPendingIntent, true)
-                .setSound(soundUri, AudioManager.STREAM_ALARM)
+                .setSound(null)
                 .setPriority(NotificationCompat.PRIORITY_MAX)
                 .setCategory(NotificationCompat.CATEGORY_ALARM)
                 .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
@@ -272,6 +265,11 @@ class AdhanService : Service() {
 
     private fun playAdhan(prayerName: String, requestedSound: String?) {
         try {
+            // Stop any fallback player in the broadcast receiver so only one player runs
+            try {
+                AdhanAlarmReceiver.stopPlayback()
+            } catch (_: Exception) {}
+
             val prefs = getSharedPreferences(AdhanScheduler.PREFS_NAME, Context.MODE_PRIVATE)
             val isMuted = prefs.getBoolean("adhan_muted", false) || prefs.getBoolean("adhan_muted_$prayerName", false)
             val soundKey = requestedSound 

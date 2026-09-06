@@ -96,14 +96,53 @@ class PrayerTimes {
         MapEntry('العشاء', isha),
       ];
 
-  /// Computes the [DateTime] for a time string such as "05:24" relative to [now].
-  static DateTime? timeToDateTime(String timeStr, DateTime reference) {
-    final parts = timeStr.split(':');
-    if (parts.length < 2) return null;
-    final hour = int.tryParse(parts[0]);
-    final minute = int.tryParse(parts[1]);
-    if (hour == null || minute == null) return null;
-    return DateTime(reference.year, reference.month, reference.day, hour, minute);
+  /// Computes the [DateTime] for a time string such as "05:24", "٠٥:٢٤", or "04:30 م" relative to [reference].
+  /// Correctly handles Arabic/Persian numerals, AM/PM markers, and 12-to-24 hour conversion for afternoon prayers.
+  static DateTime? timeToDateTime(String timeStr, DateTime reference, [String? prayerName]) {
+    try {
+      final clean = timeStr
+          .replaceAll('\u200e', '')
+          .replaceAll('\u200f', '')
+          .replaceAll('\u061c', '')
+          .replaceAll('\u00a0', ' ')
+          .trim();
+      final isPM = clean.contains('م') || clean.toUpperCase().contains('PM');
+      final isAM = clean.contains('ص') || clean.toUpperCase().contains('AM');
+
+      // Normalize Arabic (٠-٩) and Persian (۰-۹) digits to Latin (0-9)
+      final normalized = clean.replaceAllMapped(RegExp(r'[٠-٩۰-۹]'), (m) {
+        final code = m.group(0)!.codeUnitAt(0);
+        if (code >= 0x0660 && code <= 0x0669) {
+          return String.fromCharCode(code - 0x0660 + 0x30);
+        } else if (code >= 0x06F0 && code <= 0x06F9) {
+          return String.fromCharCode(code - 0x06F0 + 0x30);
+        }
+        return m.group(0)!;
+      });
+
+      final match = RegExp(r'(\d{1,2})\s*:\s*(\d{1,2})').firstMatch(normalized);
+      if (match == null) return null;
+
+      var hour = int.tryParse(match.group(1)!);
+      final minute = int.tryParse(match.group(2)!);
+      if (hour == null || minute == null) return null;
+
+      if (isPM && hour < 12) {
+        hour += 12;
+      } else if (isAM && hour == 12) {
+        hour = 0;
+      } else if (!isPM && !isAM && prayerName != null) {
+        // Auto-detect 12-hour values for afternoon/night prayers if given without AM/PM
+        if (prayerName.contains('ظهر') && hour >= 1 && hour <= 10) hour += 12;
+        if (prayerName.contains('عصر') && hour < 12) hour += 12;
+        if (prayerName.contains('مغرب') && hour < 12) hour += 12;
+        if (prayerName.contains('عشاء') && hour < 12) hour += 12;
+      }
+
+      return DateTime(reference.year, reference.month, reference.day, hour, minute);
+    } catch (_) {
+      return null;
+    }
   }
 
   /// Returns the name and time of the next prayer relative to [now].
@@ -119,18 +158,38 @@ class PrayerTimes {
     ];
 
     for (final entry in salawat) {
-      final dt = timeToDateTime(entry.value, now);
+      final dt = timeToDateTime(entry.value, now, entry.key);
       if (dt != null && dt.isAfter(now)) return entry;
     }
-    return null; // all prayers have passed — return tomorrow's Fajr conceptually
+    return null; // all prayers have passed today — return tomorrow's Fajr conceptually
   }
 
   /// Returns the number of [Duration] remaining until the next prayer.
+  /// If today's prayers have all completed, accurately returns the time until tomorrow's Fajr.
   Duration? timeUntilNextPrayer(DateTime now) {
     final next = nextPrayer(now);
-    if (next == null) return null;
-    final dt = timeToDateTime(next.value, now);
-    if (dt == null) return null;
-    return dt.difference(now);
+    if (next != null) {
+      final dt = timeToDateTime(next.value, now, next.key);
+      if (dt != null) {
+        final diff = dt.difference(now);
+        return diff.isNegative ? Duration.zero : diff;
+      }
+    }
+    // All prayers completed today -> time until tomorrow's Fajr
+    final tomorrowFajr = timeToDateTime(fajr, now.add(const Duration(days: 1)), 'الفجر');
+    if (tomorrowFajr != null) {
+      final diff = tomorrowFajr.difference(now);
+      return diff.isNegative ? Duration.zero : diff;
+    }
+    return null;
+  }
+
+  /// Returns the exact [DateTime] of the upcoming prayer (today's next or tomorrow's Fajr).
+  DateTime? nextPrayerDateTime(DateTime now) {
+    final next = nextPrayer(now);
+    if (next != null) {
+      return timeToDateTime(next.value, now, next.key);
+    }
+    return timeToDateTime(fajr, now.add(const Duration(days: 1)), 'الفجر');
   }
 }
