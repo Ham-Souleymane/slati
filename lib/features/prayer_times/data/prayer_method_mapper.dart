@@ -12,6 +12,13 @@ abstract class PrayerMethodMapper {
     return _map[countryCode.toUpperCase()] ?? 3;
   }
 
+  /// Returns the Aladhan school ID most appropriate for [countryCode].
+  /// 1 = Hanafi (later Asr timing), 0 = Shafi'i/Maliki/Hanbali (standard, default).
+  /// Falls back to 0 (Shafi'i) for unmapped countries.
+  static int schoolForCountry(String countryCode) {
+    return _schoolMap[countryCode.toUpperCase()] ?? 0;
+  }
+
   /// Human-readable label for [methodId] (Arabic).
   static String labelForMethod(int methodId) {
     return _labels[methodId] ?? 'رابطة العالم الإسلامي (MWL)';
@@ -215,5 +222,29 @@ abstract class PrayerMethodMapper {
     22: 'Islamic Association of North America (Canada)',
     23: 'Official Calendar — Bangladesh',
     24: 'Abu Dhabi Agriculture and Food Safety Authority',
+  };
+
+  /// Maps country codes to Aladhan school IDs.
+  /// 1 = Hanafi, 0 = Shafi'i/Maliki/Hanbali (default — not listed here).
+  static const Map<String, int> _schoolMap = {
+    // Hanafi-majority countries
+    'PK': 1, // Pakistan
+    'AF': 1, // Afghanistan
+    'BD': 1, // Bangladesh
+    'IN': 1, // India (majority Hanafi)
+    'TR': 1, // Turkey
+    'UZ': 1, // Uzbekistan
+    'TJ': 1, // Tajikistan
+    'KG': 1, // Kyrgyzstan
+    'TM': 1, // Turkmenistan
+    'KZ': 1, // Kazakhstan
+    'AZ': 1, // Azerbaijan
+    'AM': 1, // Armenia (Muslim minority, Hanafi)
+    'GE': 1, // Georgia (Muslim minority, Hanafi)
+    'RU': 1, // Russia (majority Hanafi in Muslim communities)
+    'AL': 1, // Albania
+    'BA': 1, // Bosnia and Herzegovina
+    'MK': 1, // North Macedonia
+    'XK': 1, // Kosovo
   };
 }

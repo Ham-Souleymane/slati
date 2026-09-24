@@ -401,6 +401,11 @@ class _FullPrayerTimesScreenState extends ConsumerState<FullPrayerTimesScreen> {
         centerTitle: true,
         actions: [
           IconButton(
+            icon: const Icon(Icons.tune_rounded, color: Colors.white),
+            tooltip: 'ضبط أوقات الصلاة',
+            onPressed: () => context.push(AppRoutes.adjustPrayerTimes),
+          ),
+          IconButton(
             icon: const Icon(Icons.volume_up_rounded, color: Colors.white),
             tooltip: context.tr('test_adhan_tooltip'),
             onPressed: () => _showTestAdhanSheet(context),
@@ -620,6 +625,7 @@ class _FullPrayerTimesScreenState extends ConsumerState<FullPrayerTimesScreen> {
   // ─────────────────────────────────────────────────────────────────────────────
   Widget _buildLocationPrayerTimes() {
     final prayerTimesAsync = ref.watch(prayerTimesProvider);
+    final tuneOffsets = ref.watch(prayerTuneProvider);
 
     return prayerTimesAsync.when(
       loading: () => const Center(
@@ -659,6 +665,7 @@ class _FullPrayerTimesScreenState extends ConsumerState<FullPrayerTimesScreen> {
               final dt = PrayerTimes.timeToDateTime(entry.value, _now, entry.key);
               final isPast = dt != null && dt.isBefore(_now);
               final isNext = entry.key == next?.key;
+              final adjustMins = tuneOffsets[entry.key] ?? 0;
 
               return _PrayerCard(
                 name: entry.key,
@@ -667,6 +674,7 @@ class _FullPrayerTimesScreenState extends ConsumerState<FullPrayerTimesScreen> {
                 isPast: isPast,
                 alertActive: _alerts[entry.key] ?? false,
                 onToggleAlert: () => _toggleAlert(entry.key, entry.value),
+                adjustmentMinutes: adjustMins,
               );
             }),
           ],
@@ -839,11 +847,14 @@ class _PrayerCard extends StatelessWidget {
     required this.isPast,
     required this.alertActive,
     required this.onToggleAlert,
+    this.adjustmentMinutes = 0,
   });
 
   final String name, time;
   final bool isNext, isPast, alertActive;
   final VoidCallback onToggleAlert;
+  /// Non-zero when the user has manually offset this prayer's time.
+  final int adjustmentMinutes;
 
   @override
   Widget build(BuildContext context) {
@@ -931,6 +942,29 @@ class _PrayerCard extends StatelessWidget {
                   letterSpacing: 0.5,
                 ),
               ),
+              // ── Manual adjustment badge ───────────────────
+              if (adjustmentMinutes != 0) ...[
+                const SizedBox(width: 5),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: isNext
+                        ? AppColors.gold.withValues(alpha: 0.25)
+                        : AppColors.emerald.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(
+                    adjustmentMinutes > 0
+                        ? '+$adjustmentMinutes'
+                        : '$adjustmentMinutes',
+                    style: GoogleFonts.tajawal(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                      color: isNext ? AppColors.goldLight : AppColors.emerald,
+                    ),
+                  ),
+                ),
+              ],
               const SizedBox(width: 14),
               Text(
                 context.tr(name),

@@ -11,6 +11,7 @@ class PrayerTimes {
     required this.methodId,
     required this.latitude,
     required this.longitude,
+    this.school = 0,
   });
 
   final String fajr;
@@ -30,6 +31,9 @@ class PrayerTimes {
   final double latitude;
   final double longitude;
 
+  /// The Aladhan school ID: 0 = Shafi'i (default), 1 = Hanafi.
+  final int school;
+
   // ── Serialization ─────────────────────────────────────────────
 
   Map<String, dynamic> toJson() => {
@@ -43,6 +47,7 @@ class PrayerTimes {
         'methodId': methodId,
         'latitude': latitude,
         'longitude': longitude,
+        'school': school,
       };
 
   factory PrayerTimes.fromJson(Map<String, dynamic> json) => PrayerTimes(
@@ -56,6 +61,7 @@ class PrayerTimes {
         methodId: (json['methodId'] as num).toInt(),
         latitude: (json['latitude'] as num).toDouble(),
         longitude: (json['longitude'] as num).toDouble(),
+        school: (json['school'] as num?)?.toInt() ?? 0,
       );
 
   PrayerTimes copyWith({
@@ -69,6 +75,7 @@ class PrayerTimes {
     int? methodId,
     double? latitude,
     double? longitude,
+    int? school,
   }) {
     return PrayerTimes(
       fajr: fajr ?? this.fajr,
@@ -81,6 +88,7 @@ class PrayerTimes {
       methodId: methodId ?? this.methodId,
       latitude: latitude ?? this.latitude,
       longitude: longitude ?? this.longitude,
+      school: school ?? this.school,
     );
   }
 

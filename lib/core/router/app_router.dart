@@ -27,6 +27,7 @@ import '../../features/ask_sheikh/presentation/question_detail_screen.dart';
 import '../../features/mosques/domain/imam_model.dart';
 import '../../features/posts/domain/post_model.dart';
 import '../../features/prayer_times/presentation/adhan_sound_settings_screen.dart';
+import '../../features/prayer_times/presentation/adjust_prayer_times_screen.dart';
 import '../../features/auth/presentation/privacy_policy_screen.dart';
 import '../../shared/widgets/scaffold_with_nav_bar.dart';
 
@@ -46,6 +47,7 @@ abstract class AppRoutes {
   static const savedMosques = '/saved-mosques';
   static const addMosque = '/add-mosque';
   static const adhanSoundSettings = '/adhan-sound-settings';
+  static const adjustPrayerTimes = '/adjust-prayer-times';
   static const ask = '/ask';
   static const askQuestion = '/ask-question';
   static const myQuestions = '/my-questions';
@@ -195,6 +197,11 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: AppRoutes.adhanSoundSettings,
         name: 'adhanSoundSettings',
         builder: (context, state) => const AdhanSoundSettingsScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.adjustPrayerTimes,
+        name: 'adjustPrayerTimes',
+        builder: (context, state) => const AdjustPrayerTimesScreen(),
       ),
       GoRoute(
         path: AppRoutes.askQuestion,
