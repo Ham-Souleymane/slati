@@ -7,74 +7,88 @@ import '../../core/providers/firebase_providers.dart';
 import '../../core/router/app_router.dart';
 import '../../core/theme/app_colors.dart';
 
-/// Wraps any action that requires a real (non-anonymous) account.
+/// Wraps any action that requires a real (non-anonymous / non-guest) account.
 ///
 /// Usage:
 /// ```dart
-/// GuestGuard(
+/// guestGuard(
 ///   ref: ref,
 ///   context: context,
 ///   action: () => doSomething(),
+///   featureName: 'التعليق', // optional — shown in the prompt
 /// );
 /// ```
 ///
-/// If the user is anonymous, shows a bottom sheet prompting them to register.
+/// If the user is a guest (unauthenticated or anonymous), shows a contextual
+/// bottom sheet prompting them to register or sign in.
 /// Otherwise, calls [action] immediately.
 void guestGuard({
   required BuildContext context,
   required WidgetRef ref,
   required VoidCallback action,
+  /// Optional: short label of the locked feature (e.g. 'التعليق').
+  String? featureName,
 }) {
   final isGuest = ref.read(isGuestProvider);
   if (isGuest) {
-    _showGuestPrompt(context);
+    _showGuestPrompt(context, featureName: featureName);
   } else {
     action();
   }
 }
 
-void _showGuestPrompt(BuildContext context) {
+void _showGuestPrompt(BuildContext context, {String? featureName}) {
   showModalBottomSheet(
     context: context,
     backgroundColor: Colors.transparent,
     isScrollControlled: true,
     useRootNavigator: true,
-    builder: (_) => const _GuestPromptSheet(),
+    builder: (_) => _GuestPromptSheet(featureName: featureName),
   );
 }
 
 class _GuestPromptSheet extends StatelessWidget {
-  const _GuestPromptSheet();
+  const _GuestPromptSheet({this.featureName});
+
+  final String? featureName;
 
   @override
   Widget build(BuildContext context) {
+    final featureLabel = featureName ?? 'التفاعل مع المحتوى';
+
     return Container(
       padding: EdgeInsets.only(
         left: 24,
         right: 24,
-        top: 24,
-        bottom: MediaQuery.of(context).viewInsets.bottom + 40,
+        top: 8,
+        bottom: MediaQuery.of(context).viewInsets.bottom + 32,
       ),
       decoration: const BoxDecoration(
         color: AppColors.surface,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           // Handle bar
-          Container(
-            width: 40,
-            height: 4,
-            decoration: BoxDecoration(
-              color: AppColors.grey300,
-              borderRadius: BorderRadius.circular(2),
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            child: Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: AppColors.grey300,
+                borderRadius: BorderRadius.circular(2),
+              ),
             ),
           ),
-          const SizedBox(height: 24),
+
+          const SizedBox(height: 8),
+
+          // Icon badge
           Container(
-            width: 64,
-            height: 64,
+            width: 72,
+            height: 72,
             decoration: BoxDecoration(
               gradient: const LinearGradient(
                 colors: [AppColors.emeraldDark, AppColors.emerald],
@@ -84,41 +98,50 @@ class _GuestPromptSheet extends StatelessWidget {
               shape: BoxShape.circle,
               boxShadow: [
                 BoxShadow(
-                  color: AppColors.emerald.withValues(alpha: 0.3),
-                  blurRadius: 16,
-                  offset: const Offset(0, 6),
+                  color: AppColors.emerald.withValues(alpha: 0.25),
+                  blurRadius: 20,
+                  offset: const Offset(0, 8),
                 ),
               ],
             ),
             child: const Icon(
               Icons.person_add_alt_1_rounded,
               color: AppColors.gold,
-              size: 32,
+              size: 34,
             ),
           ),
+
           const SizedBox(height: 20),
+
+          // Title
           Text(
-            'أنشئ حساباً للمتابعة والتفاعل',
+            'يتطلب هذا حساباً',
             style: GoogleFonts.tajawal(
-              fontSize: 20,
+              fontSize: 21,
               fontWeight: FontWeight.w800,
               color: AppColors.emeraldDark,
             ),
             textDirection: TextDirection.rtl,
             textAlign: TextAlign.center,
           ),
-          const SizedBox(height: 10),
+
+          const SizedBox(height: 8),
+
+          // Contextual sub-message
           Text(
-            'سجّل حسابك مجاناً لتتمكن من الإعجاب بالمنشورات،\nمتابعة المساجد، وتلقّي الإشعارات.',
+            'لاستخدام "$featureLabel" يجب أن يكون لديك حساب.\nسجّل مجاناً في ثوانٍ أو سجّل الدخول إن كنت تملك حساباً.',
             style: GoogleFonts.tajawal(
               fontSize: 14,
               color: AppColors.grey500,
-              height: 1.6,
+              height: 1.65,
             ),
             textDirection: TextDirection.rtl,
             textAlign: TextAlign.center,
           ),
+
           const SizedBox(height: 28),
+
+          // Primary CTA — Register
           SizedBox(
             width: double.infinity,
             height: 52,
@@ -126,7 +149,7 @@ class _GuestPromptSheet extends StatelessWidget {
               onPressed: () {
                 final router = GoRouter.of(context);
                 Navigator.pop(context);
-                router.go(AppRoutes.register);
+                router.push(AppRoutes.register);
               },
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.emerald,
@@ -137,7 +160,7 @@ class _GuestPromptSheet extends StatelessWidget {
                 ),
               ),
               child: Text(
-                'إنشاء حساب',
+                'إنشاء حساب مجاني',
                 style: GoogleFonts.tajawal(
                   fontSize: 16,
                   fontWeight: FontWeight.w700,
@@ -146,7 +169,43 @@ class _GuestPromptSheet extends StatelessWidget {
               ),
             ),
           ),
-          const SizedBox(height: 12),
+
+          const SizedBox(height: 10),
+
+          // Secondary CTA — Login
+          SizedBox(
+            width: double.infinity,
+            height: 48,
+            child: OutlinedButton(
+              onPressed: () {
+                final router = GoRouter.of(context);
+                Navigator.pop(context);
+                router.push(AppRoutes.login);
+              },
+              style: OutlinedButton.styleFrom(
+                foregroundColor: AppColors.emeraldDark,
+                side: BorderSide(
+                  color: AppColors.emerald.withValues(alpha: 0.5),
+                  width: 1.5,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+              ),
+              child: Text(
+                'تسجيل الدخول',
+                style: GoogleFonts.tajawal(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.emeraldDark,
+                ),
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 8),
+
+          // Dismiss
           TextButton(
             onPressed: () => Navigator.pop(context),
             child: Text(

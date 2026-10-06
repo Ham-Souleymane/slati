@@ -183,9 +183,24 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       const SizedBox(height: 16),
-                      Align(
-                        alignment: isAr ? Alignment.centerLeft : Alignment.centerRight,
-                        child: _buildLanguageToggle(),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          // Back button (visible only when pushed, not as root route)
+                          if (context.canPop())
+                            IconButton(
+                              icon: Icon(
+                                isAr ? Icons.arrow_forward_ios_rounded : Icons.arrow_back_ios_rounded,
+                                color: AppColors.emeraldDark,
+                                size: 20,
+                              ),
+                              onPressed: () => context.pop(),
+                              tooltip: 'رجوع',
+                            )
+                          else
+                            const SizedBox(width: 48),
+                          _buildLanguageToggle(),
+                        ],
                       ),
                       const SizedBox(height: 16),
                       _buildHeader(),

@@ -8,6 +8,7 @@ import '../../core/services/notification_service.dart';
 import '../../features/auth/presentation/login_screen.dart';
 import '../../features/auth/presentation/register_screen.dart';
 import '../../features/auth/presentation/splash_screen.dart';
+import '../../features/auth/presentation/onboarding_screen.dart';
 import '../../features/auth/presentation/location_permission_screen.dart';
 import '../../features/home/presentation/home_screen.dart';
 import '../../features/mosques/presentation/nearby_mosques_screen.dart';
@@ -34,6 +35,7 @@ import '../../shared/widgets/scaffold_with_nav_bar.dart';
 // ── Route names ───────────────────────────────────────────────
 abstract class AppRoutes {
   static const splash = '/';
+  static const onboarding = '/onboarding';
   static const login = '/login';
   static const register = '/register';
   static const locationPermission = '/location-permission';
@@ -90,43 +92,43 @@ class _RouterNotifier extends ChangeNotifier {
 
     final authState = _ref.read(authStateChangesProvider);
 
-    // Wait for Firebase auth to initialise
+    // Wait for Firebase auth to initialise — show splash
     if (authState.isLoading) {
       if (location != AppRoutes.splash) return AppRoutes.splash;
       return null;
     }
 
     final user = authState.asData?.value;
-    final isLoggedIn = user != null; // includes anonymous users
+    final isLoggedIn = user != null && !user.isAnonymous;
 
-    const publicRoutes = {
-      AppRoutes.splash,
+    const authOnlyRoutes = {
       AppRoutes.login,
       AppRoutes.register,
+      AppRoutes.splash,
+      AppRoutes.onboarding,
     };
 
-    // 1. Unauthenticated → redirect to login (public routes exempt)
-    if (!isLoggedIn) {
-      if (!publicRoutes.contains(location)) return AppRoutes.login;
-      return null;
-    }
-
-    final userLocation = _ref.read(userLocationProvider);
-
-    // 2. Logged-in but location is unconfigured → force Location Permission
-    if (userLocation == null) {
-      if (location != AppRoutes.locationPermission) {
-        return AppRoutes.locationPermission;
-      }
-      return null;
-    }
-
-    // 3. Logged-in with location → prevent going back to auth/location screens
-    if (publicRoutes.contains(location) ||
-        location == AppRoutes.locationPermission) {
+    // 1. Logged-in real user → don't let them go back to auth screens
+    if (isLoggedIn && authOnlyRoutes.contains(location)) {
+      final userLocation = _ref.read(userLocationProvider);
+      if (userLocation == null) return AppRoutes.locationPermission;
       return AppRoutes.home;
     }
 
+    // 2. Enforce location for everyone (real users and guests)
+    // If no location is set, and we are not on an auth route, splash, or the permission screen itself
+    final userLocation = _ref.read(userLocationProvider);
+    if (userLocation == null && !authOnlyRoutes.contains(location) && location != AppRoutes.locationPermission) {
+      return AppRoutes.locationPermission;
+    }
+
+    // If location IS set, and they are on the location permission screen, redirect to home
+    if (userLocation != null && location == AppRoutes.locationPermission) {
+      return AppRoutes.home;
+    }
+
+    // 3. Everyone else can freely browse
+    // Protected actions are gated in-context via guestGuard().
     return null;
   }
 }
@@ -148,6 +150,11 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: AppRoutes.splash,
         name: 'splash',
         builder: (context, state) => const SplashScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.onboarding,
+        name: 'onboarding',
+        builder: (context, state) => const OnboardingScreen(),
       ),
       GoRoute(
         path: AppRoutes.login,

@@ -102,13 +102,14 @@ extension BuildContextX on BuildContext {
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 24),
+            // Primary — Register
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
                 onPressed: () {
                   final router = GoRouter.of(this);
                   Navigator.pop(ctx);
-                  router.go('/register');
+                  router.push('/register');
                 },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.emerald,
@@ -124,6 +125,37 @@ extension BuildContextX on BuildContext {
                   style: GoogleFonts.tajawal(
                     fontSize: 15,
                     fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 10),
+            // Secondary — Sign In
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton(
+                onPressed: () {
+                  final router = GoRouter.of(this);
+                  Navigator.pop(ctx);
+                  router.push('/login');
+                },
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppColors.emeraldDark,
+                  side: BorderSide(
+                    color: AppColors.emerald.withValues(alpha: 0.5),
+                    width: 1.5,
+                  ),
+                  padding: const EdgeInsets.symmetric(vertical: 13),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                child: Text(
+                  tr('sign_in'),
+                  style: GoogleFonts.tajawal(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.emeraldDark,
                   ),
                 ),
               ),

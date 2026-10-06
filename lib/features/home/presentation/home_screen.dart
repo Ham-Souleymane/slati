@@ -254,77 +254,95 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
 
                     const SizedBox(height: 16),
 
-                    // ── Followed Posts Navigation Banner ──────────────
-                    GestureDetector(
-                      onTap: () => context.go('/feed?tab=followed'),
-                      child: Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 16, vertical: 14),
-                        decoration: BoxDecoration(
-                          color: AppColors.white,
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: AppColors.divider),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.04),
-                              blurRadius: 10,
-                              offset: const Offset(0, 3),
-                            ),
-                          ],
-                        ),
-                        child: Row(
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.all(10),
-                              decoration: BoxDecoration(
-                                color: AppColors.gold.withValues(alpha: 0.12),
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: const Icon(
-                                Icons.dynamic_feed_rounded,
-                                color: AppColors.gold,
-                                size: 24,
-                              ),
-                            ),
-                            const SizedBox(width: 14),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    'منشورات المساجد المتابعة',
-                                    style: GoogleFonts.tajawal(
-                                      fontSize: 15,
-                                      fontWeight: FontWeight.w800,
-                                      color: AppColors.charcoal,
-                                    ),
+                    // ── Banners Carousel ──────────────
+                    SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      physics: const BouncingScrollPhysics(),
+                      clipBehavior: Clip.none,
+                      child: Row(
+                        children: [
+                          // 1. Followed Posts Banner
+                          SizedBox(
+                            width: MediaQuery.sizeOf(context).width * 0.8,
+                            child: GestureDetector(
+                              onTap: () => context.go('/feed?tab=followed'),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 16, vertical: 16),
+                                decoration: BoxDecoration(
+                                  gradient: const LinearGradient(
+                                    colors: [AppColors.emeraldDark, Color(0xFF065F46)],
+                                    begin: Alignment.topRight,
+                                    end: Alignment.bottomLeft,
                                   ),
-                                  const SizedBox(height: 2),
-                                  Text(
-                                    'عرض أحدث منشورات وإعلانات المساجد التي تتابعها',
-                                    style: GoogleFonts.tajawal(
-                                      fontSize: 12,
-                                      color: AppColors.grey500,
+                                  borderRadius: BorderRadius.circular(18),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: AppColors.emeraldDark.withValues(alpha: 0.35),
+                                      blurRadius: 12,
+                                      offset: const Offset(0, 4),
                                     ),
-                                  ),
-                                ],
+                                  ],
+                                ),
+                                child: Row(
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.all(10),
+                                      decoration: BoxDecoration(
+                                        color: Colors.white.withValues(alpha: 0.15),
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                      child: const Icon(
+                                        Icons.dynamic_feed_rounded,
+                                        color: AppColors.gold,
+                                        size: 24,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 14),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            'منشورات المساجد',
+                                            style: GoogleFonts.tajawal(
+                                              fontSize: 15,
+                                              fontWeight: FontWeight.w800,
+                                              color: Colors.white,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 2),
+                                          Text(
+                                            'أحدث منشورات من تتابع',
+                                            style: GoogleFonts.tajawal(
+                                              fontSize: 12,
+                                              color: Colors.white.withValues(alpha: 0.75),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    const Icon(
+                                      Icons.arrow_back_ios_rounded,
+                                      size: 16,
+                                      color: AppColors.gold,
+                                    ),
+                                  ],
+                                ),
                               ),
                             ),
-                            const Icon(
-                              Icons.arrow_forward_ios_rounded,
-                              size: 16,
-                              color: AppColors.grey300,
-                            ),
-                          ],
-                        ),
+                          ),
+                          
+                          const SizedBox(width: 12),
+                          
+                          // 2. WhatsApp Banner
+                          SizedBox(
+                            width: MediaQuery.sizeOf(context).width * 0.8,
+                            child: _WhatsAppChannelBanner(),
+                          ),
+                        ],
                       ),
                     ),
-
-                    const SizedBox(height: 16),
-
-                    // ── WhatsApp Channel Banner ──────────────────────
-                    _WhatsAppChannelBanner(),
 
                     const SizedBox(height: 16),
 
@@ -904,17 +922,17 @@ class _WhatsAppChannelBanner extends StatelessWidget {
       onTap: _openChannel,
       child: Container(
         width: double.infinity,
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
         decoration: BoxDecoration(
           gradient: const LinearGradient(
-            colors: [Color(0xFF25D366), Color(0xFF128C7E)],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
+            colors: [Color(0xFF1A6B3C), Color(0xFF128C7E)],
+            begin: Alignment.topRight,
+            end: Alignment.bottomLeft,
           ),
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(18),
           boxShadow: [
             BoxShadow(
-              color: const Color(0xFF25D366).withValues(alpha: 0.35),
+              color: const Color(0xFF128C7E).withValues(alpha: 0.4),
               blurRadius: 12,
               offset: const Offset(0, 4),
             ),
@@ -925,12 +943,12 @@ class _WhatsAppChannelBanner extends StatelessWidget {
             Container(
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.2),
+                color: Colors.white.withValues(alpha: 0.15),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: const Icon(
                 Icons.campaign_rounded,
-                color: Colors.white,
+                color: AppColors.gold,
                 size: 24,
               ),
             ),
@@ -952,16 +970,16 @@ class _WhatsAppChannelBanner extends StatelessWidget {
                     'تابعنا للحصول على آخر الأخبار والتحديثات',
                     style: GoogleFonts.tajawal(
                       fontSize: 12,
-                      color: Colors.white.withValues(alpha: 0.85),
+                      color: Colors.white.withValues(alpha: 0.75),
                     ),
                   ),
                 ],
               ),
             ),
             const Icon(
-              Icons.arrow_forward_ios_rounded,
+              Icons.arrow_back_ios_rounded,
               size: 16,
-              color: Colors.white,
+              color: AppColors.gold,
             ),
           ],
         ),

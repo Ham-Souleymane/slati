@@ -4,8 +4,11 @@ import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../../core/localization/app_localizations.dart';
+import '../../../core/providers/firebase_providers.dart';
 import '../../../core/router/app_router.dart';
+import '../../../core/services/location_service.dart';
 import '../../../core/theme/app_colors.dart';
+import '../application/auth_controller.dart';
 
 /// Splash screen that checks authentication state and auto-routes.
 class SplashScreen extends ConsumerStatefulWidget {
@@ -48,10 +51,29 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
   }
 
   Future<void> _checkAuthAndNavigate() async {
+    // Wait for the splash animation
     await Future.delayed(const Duration(milliseconds: 2000));
     if (!mounted) return;
+
+    // Automatically sign in anonymously if completely unauthenticated
+    // This ensures Firestore rules (request.auth != null) are met for "guests"
+    final currentUser = ref.read(firebaseAuthProvider).currentUser;
+    if (currentUser == null) {
+      await ref.read(authControllerProvider.notifier).signInAnonymously();
+    }
+
+    if (!mounted) return;
+    
+    // Check if first launch
+    final prefs = ref.read(sharedPreferencesProvider);
+    final hasSeenOnboarding = prefs.getBool('has_seen_onboarding') ?? false;
+
     // Router redirect logic handles navigation based on auth + user location.
-    context.go(AppRoutes.home);
+    if (!hasSeenOnboarding) {
+      context.go(AppRoutes.onboarding);
+    } else {
+      context.go(AppRoutes.home);
+    }
   }
 
   @override

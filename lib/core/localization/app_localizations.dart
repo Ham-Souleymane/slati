@@ -138,6 +138,10 @@ class AppLocalizations {
       'guest_upgrade_title': 'أنشئ حساباً للمتابعة والتفاعل',
       'guest_upgrade_desc': 'لتتمكن من تسجيل الإعجاب، التعليق، ومتابعة الأئمة والمساجد والمزيد.',
       'create_account': 'إنشاء حساب',
+      'sign_in': 'تسجيل الدخول',
+      'upgrade_title': 'أنشئ حساباً للمتابعة',
+      'upgrade_subtitle': 'قم بالتسجيل لمتابعة المساجد والتفاعل',
+      'register_btn': 'تسجيل',
 
       // Login Screen
       'login_google_failed': 'فشل تسجيل الدخول عبر Google',
@@ -578,6 +582,10 @@ class AppLocalizations {
       'guest_upgrade_title': 'Create a free account',
       'guest_upgrade_desc': 'Save your preferences and track times across devices.',
       'create_account': 'Create Account',
+      'sign_in': 'Sign In',
+      'upgrade_title': 'Unlock Full Access',
+      'upgrade_subtitle': 'Create an account to follow mosques & interact',
+      'register_btn': 'Register',
 
       // Login Screen
       'login_google_failed': 'Failed to sign in with Google',

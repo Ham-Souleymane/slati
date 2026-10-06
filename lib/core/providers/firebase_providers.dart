@@ -38,12 +38,14 @@ final firebaseMessagingProvider = Provider<FirebaseMessaging>((ref) {
   return FirebaseMessaging.instance;
 });
 
-/// True when the current signed-in user is an anonymous (guest) session.
+/// True when the user is NOT a fully registered account.
+/// This includes: anonymous Firebase sessions AND unauthenticated (null) users.
 /// Reactive: rebuilds widgets when auth state changes.
 final isGuestProvider = Provider<bool>((ref) {
   final authState = ref.watch(authStateChangesProvider);
   return authState.maybeWhen(
-    data: (user) => user?.isAnonymous ?? false,
-    orElse: () => false,
+    // Guest = no user at all, OR an anonymous Firebase user
+    data: (user) => user == null || user.isAnonymous,
+    orElse: () => true, // treat loading/error as guest
   );
 });
