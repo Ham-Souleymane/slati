@@ -12,6 +12,125 @@ abstract class PrayerMethodMapper {
     return _map[countryCode.toUpperCase()] ?? 3;
   }
 
+  /// Geographically infers country code directly from coordinates [lat]/[lng].
+  /// Operates 100% offline without requiring device geocoding services.
+  static String? detectCountryFromCoordinates(double lat, double lng) {
+    // Algeria (lat 19°N to 37.2°N, lng -8.7°W to 12°E)
+    if (lat >= 19.0 && lat <= 37.2 && lng >= -8.7 && lng <= 12.0) {
+      // Differentiate Morocco from West Algeria if lng <= -2.1
+      if (lng <= -2.1 && lat >= 27.6 && lat <= 36.0) {
+        return 'MA';
+      }
+      // Differentiate Tunisia from East Algeria if lng >= 8.2
+      if (lng >= 8.2 && lat >= 30.2 && lat <= 37.5) {
+        return 'TN';
+      }
+      return 'DZ';
+    }
+
+    // Morocco
+    if (lat >= 21.0 && lat <= 36.0 && lng >= -17.1 && lng <= -1.0) {
+      return 'MA';
+    }
+
+    // Tunisia
+    if (lat >= 30.2 && lat <= 37.5 && lng >= 7.5 && lng <= 11.6) {
+      return 'TN';
+    }
+
+    // Egypt
+    if (lat >= 22.0 && lat <= 31.7 && lng >= 25.0 && lng <= 36.9) {
+      return 'EG';
+    }
+
+    // Libya
+    if (lat >= 19.5 && lat <= 33.2 && lng >= 9.3 && lng <= 25.2) {
+      return 'LY';
+    }
+
+    // Saudi Arabia & Arabian Peninsula
+    if (lat >= 16.0 && lat <= 32.2 && lng >= 34.5 && lng <= 55.7) {
+      if (lng >= 51.5 && lat <= 26.1 && lat >= 22.5) return 'AE';
+      if (lng >= 50.7 && lng <= 51.7 && lat >= 24.5 && lat <= 26.2) return 'QA';
+      if (lng >= 46.5 && lng <= 48.5 && lat >= 28.5 && lat <= 30.1) return 'KW';
+      if (lng >= 50.3 && lng <= 50.8 && lat >= 25.8 && lat <= 26.4) return 'BH';
+      if (lng >= 52.0 && lat <= 24.0) return 'OM';
+      return 'SA';
+    }
+
+    // UAE
+    if (lat >= 22.5 && lat <= 26.1 && lng >= 51.5 && lng <= 56.4) {
+      return 'AE';
+    }
+
+    // Kuwait
+    if (lat >= 28.5 && lat <= 30.1 && lng >= 46.5 && lng <= 48.5) {
+      return 'KW';
+    }
+
+    // Qatar
+    if (lat >= 24.5 && lat <= 26.2 && lng >= 50.7 && lng <= 51.7) {
+      return 'QA';
+    }
+
+    // Jordan
+    if (lat >= 29.2 && lat <= 33.4 && lng >= 34.9 && lng <= 39.3) {
+      return 'JO';
+    }
+
+    // Palestine / Israel
+    if (lat >= 29.5 && lat <= 33.3 && lng >= 34.2 && lng <= 35.9) {
+      return 'PS';
+    }
+
+    // Turkey
+    if (lat >= 36.0 && lat <= 42.1 && lng >= 26.0 && lng <= 44.8) {
+      return 'TR';
+    }
+
+    // France
+    if (lat >= 41.3 && lat <= 51.1 && lng >= -5.0 && lng <= 9.6) {
+      return 'FR';
+    }
+
+    // United Kingdom
+    if (lat >= 49.9 && lat <= 58.7 && lng >= -8.0 && lng <= 1.8) {
+      return 'GB';
+    }
+
+    // Pakistan
+    if (lat >= 23.6 && lat <= 37.1 && lng >= 60.9 && lng <= 77.8) {
+      return 'PK';
+    }
+
+    // India
+    if (lat >= 8.0 && lat <= 35.5 && lng >= 68.1 && lng <= 97.4) {
+      return 'IN';
+    }
+
+    // Indonesia
+    if (lat >= -11.0 && lat <= 6.0 && lng >= 95.0 && lng <= 141.0) {
+      return 'ID';
+    }
+
+    // Malaysia
+    if (lat >= 1.0 && lat <= 7.4 && lng >= 99.6 && lng <= 119.3) {
+      return 'MY';
+    }
+
+    // USA
+    if (lat >= 24.5 && lat <= 49.4 && lng >= -125.0 && lng <= -66.9) {
+      return 'US';
+    }
+
+    // Canada
+    if (lat >= 42.0 && lat <= 70.0 && lng >= -141.0 && lng <= -52.6) {
+      return 'CA';
+    }
+
+    return null;
+  }
+
   /// Returns the Aladhan school ID most appropriate for [countryCode].
   /// 1 = Hanafi (later Asr timing), 0 = Shafi'i/Maliki/Hanbali (standard, default).
   /// Falls back to 0 (Shafi'i) for unmapped countries.
@@ -30,55 +149,56 @@ abstract class PrayerMethodMapper {
   }
 
   /// Full list of methods available in-app for the Settings picker (Arabic labels).
+  /// Accurately aligned with official Aladhan API method IDs (https://api.aladhan.com/v1/methods).
   static const List<MapEntry<int, String>> allMethods = [
-    MapEntry(1, 'هيئة الرصد الجوي الكويتية'),
-    MapEntry(2, 'جامعة العلوم الإسلامية، كراتشي'),
-    MapEntry(3, 'رابطة العالم الإسلامي (MWL)'),
-    MapEntry(4, 'أم القرى، مكة المكرمة'),
-    MapEntry(5, 'الهيئة المصرية العامة للمساحة'),
-    MapEntry(7, 'اتحاد المنظمات الإسلامية في أمريكا الشمالية (ISNA)'),
-    MapEntry(8, 'الخليج العربي'),
-    MapEntry(9, 'ديانت إيشلري باشقانليغي (تركيا)'),
-    MapEntry(10, 'الجزائر — وزارة الشؤون الدينية'),
-    MapEntry(11, 'لجنة التحقق الوطنية (اندونيسيا)'),
-    MapEntry(12, 'المجلس الإسلامي للفرنسيين في المناطق الشمالية'),
-    MapEntry(13, 'المطالبة الرسمية العُمانية'),
-    MapEntry(14, 'قطر — وزارة الشؤون الدينية'),
-    MapEntry(15, 'سنغافورة'),
-    MapEntry(16, 'اتحاد المنظمات الإسلامية في فرنسا (UOIF)'),
-    MapEntry(17, 'دائرة الشؤون الدينية، كوالالمبور'),
-    MapEntry(18, 'المغرب — وزارة الأوقاف'),
-    MapEntry(19, 'الجامعة الإسلامية في الإمارات'),
-    MapEntry(21, 'المجلس الأوروبي للإفتاء والبحوث'),
-    MapEntry(22, 'الجمعية الإسلامية في أمريكا الشمالية (Canada)'),
-    MapEntry(23, 'التقويم الرسمي — بنجلاديش'),
-    MapEntry(24, 'هيئة أبوظبي للزراعة والسلامة الغذائية'),
+    MapEntry(2, 'الجمعية الإسلامية لأمريكا الشمالية (ISNA — زاوية 15°)'),
+    MapEntry(19, 'الجزائر — وزارة الشؤون الدينية والأوقاف (زاوية 17°)'),
+    MapEntry(3, 'رابطة العالم الإسلامي (MWL — زاوية 17°)'),
+    MapEntry(4, 'أم القرى، مكة المكرمة (Umm Al-Qura)'),
+    MapEntry(5, 'الهيئة المصرية العامة للمساحة (زاوية 17.5°)'),
+    MapEntry(1, 'جامعة العلوم الإسلامية، كراتشي (Karachi)'),
+    MapEntry(18, 'تونس — وزارة الشؤون الدينية'),
+    MapEntry(21, 'المغرب — وزارة الأوقاف والشؤون الإسلامية'),
+    MapEntry(16, 'دبي — دائرة الشؤون الإسلامية (UAE)'),
+    MapEntry(9, 'الكويت — وزارة الأوقاف'),
+    MapEntry(10, 'قطر — وزارة الأوقاف والشؤون الإسلامية'),
+    MapEntry(23, 'الأردن — وزارة الأوقاف والمقدسات الإسلامية'),
+    MapEntry(8, 'منطقة الخليج العربي'),
+    MapEntry(12, 'فرنسا — اتحاد المنظمات الإسلامية (UOIF — زاوية 12°)'),
+    MapEntry(13, 'تركيا — ديانت إيشلري باشقانليغي (Diyanet)'),
+    MapEntry(17, 'ماليزيا — إدارة التنمية الإسلامية (JAKIM)'),
+    MapEntry(20, 'إندونيسيا — وزارة الشؤون الدينية (Kemenag)'),
+    MapEntry(11, 'سنغافورة — المجلس الإسلامي (MUIS)'),
+    MapEntry(14, 'روسيا — الإدارة الدينية لمسلمي روسيا'),
+    MapEntry(15, 'لجنة تحري الهلال العالمية (Moonsighting.com)'),
+    MapEntry(22, 'البرتغال — الجالية الإسلامية في لشبونة'),
+    MapEntry(7, 'معهد الجيوفيزياء، جامعة طهران'),
   ];
 
   /// Full list of methods available in-app for the Settings picker (English labels).
   static const List<MapEntry<int, String>> allMethodsEn = [
-    MapEntry(1, 'Kuwait Meteorological Authority'),
-    MapEntry(2, 'University of Islamic Sciences, Karachi'),
-    MapEntry(3, 'Muslim World League (MWL)'),
-    MapEntry(4, 'Umm Al-Qura, Makkah'),
-    MapEntry(5, 'Egyptian General Authority of Survey'),
-    MapEntry(7, 'Islamic Society of North America (ISNA)'),
+    MapEntry(2, 'Islamic Society of North America (ISNA — 15° angle)'),
+    MapEntry(19, 'Algeria — Ministry of Religious Affairs (17° angle)'),
+    MapEntry(3, 'Muslim World League (MWL — 17° angle)'),
+    MapEntry(4, 'Umm Al-Qura University, Makkah'),
+    MapEntry(5, 'Egyptian General Authority of Survey (17.5° angle)'),
+    MapEntry(1, 'University of Islamic Sciences, Karachi'),
+    MapEntry(18, 'Tunisia — Ministry of Religious Affairs'),
+    MapEntry(21, 'Morocco — Ministry of Habous and Islamic Affairs'),
+    MapEntry(16, 'Dubai — Islamic Affairs (UAE)'),
+    MapEntry(9, 'Kuwait — Ministry of Awqaf'),
+    MapEntry(10, 'Qatar — Ministry of Awqaf'),
+    MapEntry(23, 'Jordan — Ministry of Awqaf'),
     MapEntry(8, 'Gulf Region'),
-    MapEntry(9, 'Diyanet İşleri Başkanlığı (Turkey)'),
-    MapEntry(10, 'Algeria — Ministry of Religious Affairs'),
-    MapEntry(11, 'National Verification Committee (Indonesia)'),
-    MapEntry(12, 'Islamic Council of France (North)'),
-    MapEntry(13, 'Omani Official Method'),
-    MapEntry(14, 'Qatar — Ministry of Religious Affairs'),
-    MapEntry(15, 'Singapore'),
-    MapEntry(16, 'Union of Islamic Organisations in France (UOIF)'),
-    MapEntry(17, 'Department of Islamic Development, Kuala Lumpur'),
-    MapEntry(18, 'Morocco — Ministry of Awqaf'),
-    MapEntry(19, 'Islamic University of UAE'),
-    MapEntry(21, 'European Council for Fatwa and Research'),
-    MapEntry(22, 'Islamic Association of North America (Canada)'),
-    MapEntry(23, 'Official Calendar — Bangladesh'),
-    MapEntry(24, 'Abu Dhabi Agriculture and Food Safety Authority'),
+    MapEntry(12, 'France — UOIF (12° angle)'),
+    MapEntry(13, 'Turkey — Diyanet'),
+    MapEntry(17, 'Malaysia — JAKIM'),
+    MapEntry(20, 'Indonesia — Kemenag'),
+    MapEntry(11, 'Singapore — MUIS'),
+    MapEntry(14, 'Russia — Spiritual Administration of Muslims'),
+    MapEntry(15, 'Moonsighting Committee Worldwide'),
+    MapEntry(22, 'Portugal — Islamic Community of Lisbon'),
+    MapEntry(7, 'Institute of Geophysics, University of Tehran'),
   ];
 
   // ── Private tables ─────────────────────────────────────────────
@@ -86,20 +206,20 @@ abstract class PrayerMethodMapper {
   static const Map<String, int> _map = {
     // Gulf / Arabian Peninsula
     'SA': 4,  // Saudi Arabia — Umm Al-Qura
-    'AE': 8,  // UAE
-    'KW': 1,  // Kuwait
-    'QA': 14, // Qatar
-    'BH': 8,  // Bahrain
-    'OM': 13, // Oman
-    'YE': 4,  // Yemen
+    'AE': 16, // UAE — Dubai
+    'KW': 9,  // Kuwait
+    'QA': 10, // Qatar
+    'BH': 8,  // Bahrain — Gulf
+    'OM': 8,  // Oman — Gulf
+    'YE': 4,  // Yemen — Umm Al-Qura
 
     // North Africa
-    'EG': 5,  // Egypt
-    'DZ': 10, // Algeria
-    'MA': 18, // Morocco
-    'TN': 5,  // Tunisia
-    'LY': 5,  // Libya
-    'SD': 5,  // Sudan
+    'EG': 5,  // Egypt — Egyptian General Authority
+    'DZ': 19, // Algeria — Ministry of Religious Affairs & Wakfs
+    'MA': 21, // Morocco — Ministry of Habous
+    'TN': 18, // Tunisia — Ministry of Religious Affairs
+    'LY': 5,  // Libya — Egyptian
+    'SD': 5,  // Sudan — Egyptian
 
     // Sub-Saharan Africa (Muslim-majority)
     'MR': 3,  // Mauritania
@@ -115,12 +235,12 @@ abstract class PrayerMethodMapper {
     'BF': 3,  // Burkina Faso
     'TD': 3,  // Chad
     'SO': 3,  // Somalia
-    'ET': 3,  // Ethiopia (partial)
+    'ET': 3,  // Ethiopia
     'TZ': 3,  // Tanzania
-    'KE': 3,  // Kenya (diaspora)
+    'KE': 3,  // Kenya
 
     // Levant / Middle East
-    'JO': 3,  // Jordan
+    'JO': 23, // Jordan
     'SY': 5,  // Syria
     'LB': 5,  // Lebanon
     'IQ': 3,  // Iraq
@@ -128,11 +248,11 @@ abstract class PrayerMethodMapper {
     'IL': 3,  // Israel
 
     // Central / South Asia
-    'PK': 2,  // Pakistan — Karachi
-    'BD': 23, // Bangladesh
-    'IN': 2,  // India
-    'AF': 2,  // Afghanistan
-    'IR': 7,  // Iran
+    'PK': 1,  // Pakistan — Karachi
+    'BD': 1,  // Bangladesh
+    'IN': 1,  // India
+    'AF': 1,  // Afghanistan
+    'IR': 7,  // Iran — Tehran
     'UZ': 3,  // Uzbekistan
     'TJ': 3,  // Tajikistan
     'KG': 3,  // Kyrgyzstan
@@ -141,33 +261,34 @@ abstract class PrayerMethodMapper {
     'AZ': 3,  // Azerbaijan
 
     // South-East Asia
-    'MY': 17, // Malaysia
-    'ID': 11, // Indonesia
-    'SG': 15, // Singapore
-    'BN': 17, // Brunei
+    'MY': 17, // Malaysia — JAKIM
+    'ID': 20, // Indonesia — Kemenag
+    'SG': 11, // Singapore — MUIS
+    'BN': 17, // Brunei — JAKIM
 
     // Turkey
-    'TR': 9,  // Turkey (Diyanet)
+    'TR': 13, // Turkey — Diyanet
 
-    // Europe (Muslim minority)
-    'FR': 16, // France — UOIF
-    'BE': 21, // Belgium — ECFR
-    'DE': 3,  // Germany — MWL
-    'GB': 3,  // UK — MWL
-    'IT': 21, // Italy — ECFR
-    'NL': 21, // Netherlands — ECFR
-    'ES': 21, // Spain — ECFR
+    // Europe
+    'FR': 12, // France — UOIF
+    'RU': 14, // Russia
+    'PT': 22, // Portugal
+    'BE': 3,  // Belgium
+    'DE': 3,  // Germany
+    'GB': 3,  // UK
+    'IT': 3,  // Italy
+    'NL': 3,  // Netherlands
+    'ES': 3,  // Spain
     'SE': 3,  // Sweden
     'NO': 3,  // Norway
     'DK': 3,  // Denmark
-    'AT': 21, // Austria — ECFR
+    'AT': 3,  // Austria
     'CH': 3,  // Switzerland
-    'RU': 3,  // Russia
 
     // North America
-    'US': 7,  // USA — ISNA
-    'CA': 22, // Canada
-    'MX': 7,  // Mexico
+    'US': 2,  // USA — ISNA
+    'CA': 2,  // Canada — ISNA
+    'MX': 2,  // Mexico — ISNA
 
     // Australia / NZ
     'AU': 3,  // Australia — MWL
@@ -175,53 +296,53 @@ abstract class PrayerMethodMapper {
   };
 
   static const Map<int, String> _labels = {
-    1: 'هيئة الرصد الجوي الكويتية',
-    2: 'جامعة العلوم الإسلامية، كراتشي',
-    3: 'رابطة العالم الإسلامي (MWL)',
+    1: 'جامعة العلوم الإسلامية، كراتشي',
+    2: 'الجمعية الإسلامية لأمريكا الشمالية (ISNA — زاوية 15°)',
+    3: 'رابطة العالم الإسلامي (MWL — زاوية 17°)',
     4: 'أم القرى، مكة المكرمة',
     5: 'الهيئة المصرية العامة للمساحة',
-    7: 'اتحاد المنظمات الإسلامية في أمريكا الشمالية (ISNA)',
-    8: 'الخليج العربي',
-    9: 'ديانت إيشلري باشقانليغي (تركيا)',
-    10: 'الجزائر — وزارة الشؤون الدينية',
-    11: 'لجنة التحقق الوطنية (اندونيسيا)',
-    12: 'المجلس الإسلامي للفرنسيين في المناطق الشمالية',
-    13: 'المطالبة الرسمية العُمانية',
-    14: 'قطر — وزارة الشؤون الدينية',
-    15: 'سنغافورة',
-    16: 'اتحاد المنظمات الإسلامية في فرنسا (UOIF)',
-    17: 'دائرة الشؤون الدينية، كوالالمبور',
-    18: 'المغرب — وزارة الأوقاف',
-    19: 'الجامعة الإسلامية في الإمارات',
-    21: 'المجلس الأوروبي للإفتاء والبحوث',
-    22: 'الجمعية الإسلامية في أمريكا الشمالية (Canada)',
-    23: 'التقويم الرسمي — بنجلاديش',
-    24: 'هيئة أبوظبي للزراعة والسلامة الغذائية',
+    7: 'معهد الجيوفيزياء، جامعة طهران',
+    8: 'منطقة الخليج العربي',
+    9: 'الكويت — وزارة الأوقاف',
+    10: 'قطر — وزارة الأوقاف والشؤون الإسلامية',
+    11: 'سنغافورة — المجلس الإسلامي (MUIS)',
+    12: 'فرنسا — اتحاد المنظمات الإسلامية (UOIF)',
+    13: 'تركيا — ديانت إيشلري باشقانليغي (Diyanet)',
+    14: 'الإدارة الدينية لمسلمي روسيا',
+    15: 'لجنة تحري الهلال العالمية',
+    16: 'دبي — دائرة الشؤون الإسلامية',
+    17: 'ماليزيا — إدارة التنمية الإسلامية (JAKIM)',
+    18: 'تونس — وزارة الشؤون الدينية',
+    19: 'الجزائر — وزارة الشؤون الدينية والأوقاف',
+    20: 'إندونيسيا — وزارة الشؤون الدينية (Kemenag)',
+    21: 'المغرب — وزارة الأوقاف والشؤون الإسلامية',
+    22: 'البرتغال — الجالية الإسلامية في لشبونة',
+    23: 'الأردن — وزارة الأوقاف والمقدسات الإسلامية',
   };
 
   static const Map<int, String> _labelsEn = {
-    1: 'Kuwait Meteorological Authority',
-    2: 'University of Islamic Sciences, Karachi',
-    3: 'Muslim World League (MWL)',
-    4: 'Umm Al-Qura, Makkah',
+    1: 'University of Islamic Sciences, Karachi',
+    2: 'Islamic Society of North America (ISNA — 15°)',
+    3: 'Muslim World League (MWL — 17°)',
+    4: 'Umm Al-Qura University, Makkah',
     5: 'Egyptian General Authority of Survey',
-    7: 'Islamic Society of North America (ISNA)',
+    7: 'Institute of Geophysics, University of Tehran',
     8: 'Gulf Region',
-    9: 'Diyanet İşleri Başkanlığı (Turkey)',
-    10: 'Algeria — Ministry of Religious Affairs',
-    11: 'National Verification Committee (Indonesia)',
-    12: 'Islamic Council of France (North)',
-    13: 'Omani Official Method',
-    14: 'Qatar — Ministry of Religious Affairs',
-    15: 'Singapore',
-    16: 'Union of Islamic Organisations in France (UOIF)',
-    17: 'Department of Islamic Development, Kuala Lumpur',
-    18: 'Morocco — Ministry of Awqaf',
-    19: 'Islamic University of UAE',
-    21: 'European Council for Fatwa and Research',
-    22: 'Islamic Association of North America (Canada)',
-    23: 'Official Calendar — Bangladesh',
-    24: 'Abu Dhabi Agriculture and Food Safety Authority',
+    9: 'Kuwait — Ministry of Awqaf',
+    10: 'Qatar — Ministry of Awqaf',
+    11: 'Singapore — MUIS',
+    12: 'France — UOIF (12°)',
+    13: 'Turkey — Diyanet',
+    14: 'Russia — Spiritual Administration of Muslims',
+    15: 'Moonsighting Committee Worldwide',
+    16: 'Dubai — Islamic Affairs',
+    17: 'Malaysia — JAKIM',
+    18: 'Tunisia — Ministry of Religious Affairs',
+    19: 'Algeria — Ministry of Religious Affairs',
+    20: 'Indonesia — Kemenag',
+    21: 'Morocco — Ministry of Habous',
+    22: 'Portugal — Islamic Community of Lisbon',
+    23: 'Jordan — Ministry of Awqaf',
   };
 
   /// Maps country codes to Aladhan school IDs.

@@ -36,6 +36,10 @@ class _LocationPermissionScreenState
             longitude: pos.longitude,
             name: myLocationText,
             isGps: true,
+            // Store accuracy metadata so the prayer service can evaluate fix quality
+            accuracyMeters: pos.accuracy,
+            capturedAtMs: DateTime.now().millisecondsSinceEpoch,
+            altitudeMeters: pos.altitude,
           );
 
 

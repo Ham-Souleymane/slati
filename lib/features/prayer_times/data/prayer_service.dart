@@ -54,7 +54,7 @@ class PrayerService {
   Future<PrayerTimes?> getPrayerTimes({
     required double latitude,
     required double longitude,
-    required int methodId,
+    int? methodId,
     int school = 0,
     int? latAdjMethod,
   }) async {
@@ -100,7 +100,7 @@ class PrayerService {
       _precacheMonthInBackground(
         latitude: latitude,
         longitude: longitude,
-        methodId: methodId,
+        methodId: methodId ?? fetched.methodId,
         school: school,
         latAdjMethod: latAdjMethod,
       );
@@ -158,9 +158,17 @@ class PrayerService {
     }
   }
 
-  /// Reverse-geocodes [latitude]/[longitude] to a country ISO code using the
-  /// device's geocoding library. Returns null on failure.
+  /// Reverse-geocodes [latitude]/[longitude] to a country ISO code using
+  /// fast offline geospatial boundary detection first, then device geocoding.
   Future<String?> reverseGeocodeCountryCode(double latitude, double longitude) async {
+    // 1. Instant offline geospatial bounding detection (100% reliable)
+    final offlineCode = PrayerMethodMapper.detectCountryFromCoordinates(latitude, longitude);
+    if (offlineCode != null) {
+      await _prefs.setString('last_known_country_code', offlineCode);
+      return offlineCode;
+    }
+
+    // 2. Fallback to device reverse-geocoding
     try {
       final placemarks = await geo.placemarkFromCoordinates(latitude, longitude);
       if (placemarks.isNotEmpty) {
@@ -235,28 +243,31 @@ class PrayerService {
     String today,
     double lat,
     double lng,
-    int methodId,
+    int? methodId,
     int school,
   ) {
     if (cached.date != today) return false;
-    if (cached.methodId != methodId) return false;
+    if (methodId != null && cached.methodId != methodId) return false;
     if (cached.school != school) return false;
 
-    // Check if location drifted more than 10 km
+    // Prayer times change meaningfully after ~1 km of movement.
+    // Use a 1 km threshold for GPS locations, 5 km for manual city picks.
+    // This ensures that moving between neighbourhoods, not just cities,
+    // correctly invalidates the cache and fetches fresh precise times.
     final distance = LocationService.calculateDistance(
       startLat: cached.latitude,
       startLng: cached.longitude,
       endLat: lat,
       endLng: lng,
     );
-    return distance < 10.0;
+    return distance < 1.0;
   }
 
   PrayerTimes? _loadFromMonthCache(
     String dateStr,
     double lat,
     double lng,
-    int methodId,
+    int? methodId,
     int school,
   ) {
     try {
@@ -289,7 +300,7 @@ class PrayerService {
   Future<void> _precacheMonthInBackground({
     required double latitude,
     required double longitude,
-    required int methodId,
+    int? methodId,
     int school = 0,
     int? latAdjMethod,
   }) async {
@@ -300,12 +311,14 @@ class PrayerService {
     }
 
     try {
-      final queryParams = {
+      final queryParams = <String, String>{
         'latitude': latitude.toString(),
         'longitude': longitude.toString(),
-        'method': methodId.toString(),
         'school': school.toString(),
       };
+      if (methodId != null) {
+        queryParams['method'] = methodId.toString();
+      }
       final resolvedLatAdj = _resolveLatAdjMethod(latitude, latAdjMethod);
       if (resolvedLatAdj != null) {
         queryParams['latitudeAdjustmentMethod'] = resolvedLatAdj.toString();
@@ -339,6 +352,23 @@ class PrayerService {
         final yearStr = (dateObj['year'] ?? now.year).toString().padLeft(4, '0');
         final formattedDate = '$yearStr-$monthStr-$dayStr';
 
+        final hijriData = dayItem['date']?['hijri'] as Map<String, dynamic>?;
+        String? hijriFormatted;
+        if (hijriData != null) {
+          final hDay = hijriData['day'] ?? '';
+          final hMonthAr = hijriData['month']?['ar'] ?? hijriData['month']?['en'] ?? '';
+          final hYear = hijriData['year'] ?? '';
+          if (hDay.toString().isNotEmpty && hYear.toString().isNotEmpty) {
+            hijriFormatted = '$hDay $hMonthAr $hYear'.trim();
+          }
+        }
+        final metaData = dayItem['meta'] as Map<String, dynamic>?;
+        final timezone = metaData?['timezone'] as String?;
+        final apiMethodObj = metaData?['method'] as Map<String, dynamic>?;
+        final resolvedDayMethod = (apiMethodObj?['id'] as num?)?.toInt() ??
+            methodId ??
+            methodForCountry(PrayerMethodMapper.detectCountryFromCoordinates(latitude, longitude));
+
         final pt = PrayerTimes(
           fajr: _cleanTime(timings['Fajr'] as String),
           sunrise: _cleanTime(timings['Sunrise'] as String),
@@ -347,10 +377,12 @@ class PrayerService {
           maghrib: _cleanTime(timings['Maghrib'] as String),
           isha: _cleanTime(timings['Isha'] as String),
           date: formattedDate,
-          methodId: methodId,
+          methodId: resolvedDayMethod,
           latitude: latitude,
           longitude: longitude,
           school: school,
+          hijriDate: hijriFormatted,
+          timezone: timezone,
         );
 
         monthMap[formattedDate] = pt.toJson();
@@ -368,7 +400,7 @@ class PrayerService {
   Future<PrayerTimes?> _fetchFromApi({
     required double latitude,
     required double longitude,
-    required int methodId,
+    int? methodId,
     required String date,
     int school = 0,
     int? latAdjMethod,
@@ -377,12 +409,14 @@ class PrayerService {
     final parts = date.split('-');
     final apiDate = '${parts[2]}-${parts[1]}-${parts[0]}';
 
-    final queryParams = {
+    final queryParams = <String, String>{
       'latitude': latitude.toString(),
       'longitude': longitude.toString(),
-      'method': methodId.toString(),
       'school': school.toString(),
     };
+    if (methodId != null) {
+      queryParams['method'] = methodId.toString();
+    }
 
     final resolvedLatAdj = _resolveLatAdjMethod(latitude, latAdjMethod);
     if (resolvedLatAdj != null) {
@@ -408,6 +442,27 @@ class PrayerService {
       }
 
       final timings = decoded['data']['timings'] as Map<String, dynamic>;
+      final hijriData = decoded['data']?['date']?['hijri'] as Map<String, dynamic>?;
+      final metaData = decoded['data']?['meta'] as Map<String, dynamic>?;
+
+      String? hijriFormatted;
+      if (hijriData != null) {
+        final hDay = hijriData['day'] ?? '';
+        final hMonthAr = hijriData['month']?['ar'] ?? hijriData['month']?['en'] ?? '';
+        final hYear = hijriData['year'] ?? '';
+        if (hDay.toString().isNotEmpty && hYear.toString().isNotEmpty) {
+          hijriFormatted = '$hDay $hMonthAr $hYear'.trim();
+        }
+      }
+      final timezone = metaData?['timezone'] as String?;
+
+      final apiMethodObj = metaData?['method'] as Map<String, dynamic>?;
+      final resolvedMethodId = (apiMethodObj?['id'] as num?)?.toInt() ??
+          methodId ??
+          methodForCountry(PrayerMethodMapper.detectCountryFromCoordinates(latitude, longitude));
+
+      // Persist the auto-detected method ID so the UI immediately reflects it
+      await _prefs.setInt('last_active_prayer_method', resolvedMethodId);
 
       final result = PrayerTimes(
         fajr: _cleanTime(timings['Fajr'] as String),
@@ -417,10 +472,12 @@ class PrayerService {
         maghrib: _cleanTime(timings['Maghrib'] as String),
         isha: _cleanTime(timings['Isha'] as String),
         date: date,
-        methodId: methodId,
+        methodId: resolvedMethodId,
         latitude: latitude,
         longitude: longitude,
         school: school,
+        hijriDate: hijriFormatted,
+        timezone: timezone,
       );
 
       // Persist to primary and fallback cache
@@ -467,6 +524,9 @@ class PrayerMethodOverrideNotifier extends Notifier<int?> {
     } else {
       await prefs.remove(_overrideKey);
     }
+    // Bust primary cache to force immediate fetch with new method
+    await prefs.remove('prayer_times_cache');
+    ref.invalidate(prayerTimesProvider);
   }
 }
 
@@ -496,6 +556,9 @@ class PrayerSchoolOverrideNotifier extends Notifier<int?> {
     } else {
       await prefs.remove(_overrideKey);
     }
+    // Bust primary cache to force immediate fetch with new school
+    await prefs.remove('prayer_times_cache');
+    ref.invalidate(prayerTimesProvider);
   }
 }
 
@@ -670,11 +733,11 @@ final prayerTimesProvider = FutureProvider<PrayerTimes?>((ref) async {
   final location = ref.watch(userLocationProvider);
   if (location == null) return null;
 
-  final methodAsync = ref.watch(activePrayerMethodProvider);
-  final methodId = methodAsync.asData?.value ?? 3;
+  final methodOverride = ref.watch(prayerMethodOverrideProvider);
+  final schoolOverride = ref.watch(prayerSchoolOverrideProvider);
 
-  final schoolAsync = ref.watch(activePrayerSchoolProvider);
-  final school = schoolAsync.asData?.value ?? 0;
+  final activeMethod = await ref.watch(activePrayerMethodProvider.future);
+  final activeSchool = await ref.watch(activePrayerSchoolProvider.future);
 
   final latAdjOverride = ref.watch(latitudeAdjMethodOverrideProvider);
 
@@ -684,8 +747,8 @@ final prayerTimesProvider = FutureProvider<PrayerTimes?>((ref) async {
   final raw = await service.getPrayerTimes(
     latitude: location.latitude,
     longitude: location.longitude,
-    methodId: methodId,
-    school: school,
+    methodId: methodOverride ?? activeMethod,
+    school: schoolOverride ?? activeSchool,
     latAdjMethod: latAdjOverride,
   );
 
@@ -752,3 +815,83 @@ final userCityProvider = FutureProvider<String?>((ref) async {
   // Return last known cached city name if geocoding fails offline
   return prefs.getString(cityKey) ?? location.name;
 });
+
+// ── GPS Location Refresh ──────────────────────────────────────────────────────
+
+/// Result of a GPS refresh attempt.
+class GpsRefreshResult {
+  const GpsRefreshResult({
+    required this.success,
+    required this.location,
+    this.errorMessage,
+  });
+
+  final bool success;
+  final UserLocation? location;
+  final String? errorMessage;
+}
+
+/// Refreshes the stored GPS position using the two-pass high-accuracy strategy.
+///
+/// Should be called from the prayer times screen when:
+///  - The stored fix is stale (> 8 h old), OR
+///  - The user taps "Refresh location".
+///
+/// Updates [userLocationProvider] and invalidates [prayerTimesProvider] so new
+/// precise times are fetched from the API automatically.
+Future<GpsRefreshResult> refreshGpsLocation(dynamic ref, [String locationName = 'موقعك الحالي']) async {
+  final locService = ref.read(locationServiceProvider) as LocationService;
+
+  try {
+    final hasPermission = await locService.checkPermission();
+    if (!hasPermission) {
+      return const GpsRefreshResult(
+        success: false,
+        location: null,
+        errorMessage: 'لم يتم منح إذن الموقع',
+      );
+    }
+
+    final pos = await locService.getCurrentPosition();
+    if (pos == null) {
+      return const GpsRefreshResult(
+        success: false,
+        location: null,
+        errorMessage: 'تعذّر الحصول على الموقع',
+      );
+    }
+
+    final newLoc = UserLocation(
+      latitude: pos.latitude,
+      longitude: pos.longitude,
+      name: locationName,
+      isGps: true,
+      accuracyMeters: pos.accuracy,
+      capturedAtMs: DateTime.now().millisecondsSinceEpoch,
+      altitudeMeters: pos.altitude,
+    );
+
+    // Update stored location — this invalidates prayerTimesProvider reactively
+    await (ref.read(userLocationProvider.notifier) as UserLocationNotifier).setLocation(newLoc);
+
+    // Also clear the primary prayer time cache so a fresh API call is forced
+    final prefs = ref.read(sharedPreferencesProvider) as SharedPreferences;
+    await prefs.remove('prayer_times_cache');
+
+    debugPrint(
+      '[LocationRefresh] GPS updated: '
+      '${pos.latitude.toStringAsFixed(6)}, ${pos.longitude.toStringAsFixed(6)} '
+      '(±${pos.accuracy.toStringAsFixed(0)} m)',
+    );
+
+    return GpsRefreshResult(success: true, location: newLoc);
+  } catch (e) {
+    debugPrint('[LocationRefresh] Error: $e');
+    return GpsRefreshResult(
+      success: false,
+      location: null,
+      errorMessage: 'خطأ: $e',
+    );
+  }
+}
+

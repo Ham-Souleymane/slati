@@ -12,6 +12,8 @@ class PrayerTimes {
     required this.latitude,
     required this.longitude,
     this.school = 0,
+    this.hijriDate,
+    this.timezone,
   });
 
   final String fajr;
@@ -34,6 +36,12 @@ class PrayerTimes {
   /// The Aladhan school ID: 0 = Shafi'i (default), 1 = Hanafi.
   final int school;
 
+  /// The formatted Hijri date from Aladhan (e.g. "28 ربيع الثاني 1446").
+  final String? hijriDate;
+
+  /// Timezone from API meta (e.g. "Africa/Algiers").
+  final String? timezone;
+
   // ── Serialization ─────────────────────────────────────────────
 
   Map<String, dynamic> toJson() => {
@@ -48,6 +56,8 @@ class PrayerTimes {
         'latitude': latitude,
         'longitude': longitude,
         'school': school,
+        if (hijriDate != null) 'hijriDate': hijriDate,
+        if (timezone != null) 'timezone': timezone,
       };
 
   factory PrayerTimes.fromJson(Map<String, dynamic> json) => PrayerTimes(
@@ -62,6 +72,8 @@ class PrayerTimes {
         latitude: (json['latitude'] as num).toDouble(),
         longitude: (json['longitude'] as num).toDouble(),
         school: (json['school'] as num?)?.toInt() ?? 0,
+        hijriDate: json['hijriDate'] as String?,
+        timezone: json['timezone'] as String?,
       );
 
   PrayerTimes copyWith({
@@ -76,6 +88,8 @@ class PrayerTimes {
     double? latitude,
     double? longitude,
     int? school,
+    String? hijriDate,
+    String? timezone,
   }) {
     return PrayerTimes(
       fajr: fajr ?? this.fajr,
@@ -89,6 +103,8 @@ class PrayerTimes {
       latitude: latitude ?? this.latitude,
       longitude: longitude ?? this.longitude,
       school: school ?? this.school,
+      hijriDate: hijriDate ?? this.hijriDate,
+      timezone: timezone ?? this.timezone,
     );
   }
 

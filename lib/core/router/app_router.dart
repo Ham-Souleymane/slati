@@ -1,4 +1,4 @@
-import 'package:flutter/widgets.dart';
+﻿import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -29,10 +29,11 @@ import '../../features/mosques/domain/imam_model.dart';
 import '../../features/posts/domain/post_model.dart';
 import '../../features/prayer_times/presentation/adhan_sound_settings_screen.dart';
 import '../../features/prayer_times/presentation/adjust_prayer_times_screen.dart';
+import '../../features/prayer_times/presentation/prayer_calendar_screen.dart';
 import '../../features/auth/presentation/privacy_policy_screen.dart';
 import '../../shared/widgets/scaffold_with_nav_bar.dart';
 
-// ── Route names ───────────────────────────────────────────────
+// â”€â”€ Route names â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 abstract class AppRoutes {
   static const splash = '/';
   static const onboarding = '/onboarding';
@@ -50,6 +51,7 @@ abstract class AppRoutes {
   static const addMosque = '/add-mosque';
   static const adhanSoundSettings = '/adhan-sound-settings';
   static const adjustPrayerTimes = '/adjust-prayer-times';
+  static const prayerCalendar = '/prayer-calendar';
   static const ask = '/ask';
   static const askQuestion = '/ask-question';
   static const myQuestions = '/my-questions';
@@ -58,9 +60,9 @@ abstract class AppRoutes {
   static const privacyPolicy = '/privacy-policy';
 }
 
-// ── Router notifier ───────────────────────────────────────────
+// â”€â”€ Router notifier â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 /// Holds the latest auth + location state and notifies GoRouter
-/// to re-run redirect() whenever those values change — without
+/// to re-run redirect() whenever those values change â€” without
 /// rebuilding the GoRouter instance itself.
 class _RouterNotifier extends ChangeNotifier {
   _RouterNotifier(this._ref) {
@@ -92,7 +94,7 @@ class _RouterNotifier extends ChangeNotifier {
 
     final authState = _ref.read(authStateChangesProvider);
 
-    // Wait for Firebase auth to initialise — show splash
+    // Wait for Firebase auth to initialise â€” show splash
     if (authState.isLoading) {
       if (location != AppRoutes.splash) return AppRoutes.splash;
       return null;
@@ -108,7 +110,7 @@ class _RouterNotifier extends ChangeNotifier {
       AppRoutes.onboarding,
     };
 
-    // 1. Logged-in real user → don't let them go back to auth screens
+    // 1. Logged-in real user â†’ don't let them go back to auth screens
     if (isLoggedIn && authOnlyRoutes.contains(location)) {
       final userLocation = _ref.read(userLocationProvider);
       if (userLocation == null) return AppRoutes.locationPermission;
@@ -133,7 +135,7 @@ class _RouterNotifier extends ChangeNotifier {
   }
 }
 
-// ── Router provider ───────────────────────────────────────────
+// â”€â”€ Router provider â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 /// The GoRouter is created ONCE and never recreated. State changes
 /// are handled via [_RouterNotifier] + refreshListenable.
 final routerProvider = Provider<GoRouter>((ref) {
@@ -145,7 +147,7 @@ final routerProvider = Provider<GoRouter>((ref) {
     refreshListenable: notifier,
     redirect: notifier.redirect,
     routes: [
-      // ── Public / auth routes (no nav bar) ─────────────────────
+      // â”€â”€ Public / auth routes (no nav bar) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
       GoRoute(
         path: AppRoutes.splash,
         name: 'splash',
@@ -172,7 +174,7 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => const LocationPermissionScreen(),
       ),
 
-      // ── Mosque details & post details (full-screen, no nav bar) ─
+      // â”€â”€ Mosque details & post details (full-screen, no nav bar) â”€
       GoRoute(
         path: AppRoutes.mosqueDetails,
         name: 'mosqueDetails',
@@ -211,6 +213,11 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => const AdjustPrayerTimesScreen(),
       ),
       GoRoute(
+        path: AppRoutes.prayerCalendar,
+        name: 'prayerCalendar',
+        builder: (context, state) => const PrayerCalendarScreen(),
+      ),
+      GoRoute(
         path: AppRoutes.askQuestion,
         name: 'askQuestion',
         builder: (context, state) {
@@ -242,7 +249,7 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => const PrivacyPolicyScreen(),
       ),
 
-      // ── Main app shell with floating nav bar ──────────────────
+      // â”€â”€ Main app shell with floating nav bar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
       ShellRoute(
         builder: (context, state, child) =>
             ScaffoldWithNavBar(child: child),

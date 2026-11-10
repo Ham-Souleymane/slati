@@ -8,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../core/providers/firebase_providers.dart';
 import '../../../core/router/app_router.dart';
+import '../../../core/services/location_service.dart';
 import '../../../core/services/notification_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/extensions.dart';
@@ -15,6 +16,7 @@ import '../../mosques/data/mosque_repository.dart';
 import '../../mosques/domain/mosque_prayer_times_model.dart';
 import '../data/prayer_service.dart';
 import '../domain/prayer_times_model.dart';
+import 'widgets/prayer_countdown_banner.dart';
 
 enum PrayerMode { location, mosque }
 
@@ -33,11 +35,50 @@ class _FullPrayerTimesScreenState extends ConsumerState<FullPrayerTimesScreen> {
   bool _ongoingBarEnabled = true;
   SharedPreferences? _prefs;
   final DateTime _now = DateTime.now();
+  bool _isRefreshingGps = false;
 
   @override
   void initState() {
     super.initState();
     _loadSettings();
+    // Schedule a stale-GPS check shortly after the screen appears
+    WidgetsBinding.instance.addPostFrameCallback((_) => _checkStaleGps());
+  }
+
+  /// If the stored GPS fix is older than 8 hours, silently refresh it
+  /// so prayer times remain precise without requiring user action.
+  Future<void> _checkStaleGps() async {
+    final loc = ref.read(userLocationProvider);
+    if (loc == null || !loc.isGps) return;
+    if (!loc.isFresh) {
+      debugPrint('[PrayerScreen] GPS fix is stale — refreshing silently');
+      await _refreshGps(silent: true);
+    }
+  }
+
+  /// Refreshes GPS position. Shows a snackbar on completion unless [silent].
+  Future<void> _refreshGps({bool silent = false}) async {
+    if (_isRefreshingGps) return;
+    setState(() => _isRefreshingGps = true);
+
+    final isAr = Localizations.localeOf(context).languageCode == 'ar';
+    final labelName = isAr ? 'موقعك الحالي' : 'My Location';
+    final result = await refreshGpsLocation(ref, labelName);
+
+    if (!mounted) return;
+    setState(() => _isRefreshingGps = false);
+    if (!silent) {
+      if (result.success) {
+        final loc = result.location!;
+        final accLabel = loc.accuracyLabel;
+        context.showSnackBar('✓ ${isAr ? "تم تحديث الموقع" : "Location updated"} — $accLabel');
+      } else {
+        context.showSnackBar(
+          result.errorMessage ?? (isAr ? 'تعذّر تحديث الموقع' : 'Could not update location'),
+          isError: true,
+        );
+      }
+    }
   }
 
   Future<void> _loadSettings() async {
@@ -140,7 +181,11 @@ class _FullPrayerTimesScreenState extends ConsumerState<FullPrayerTimesScreen> {
     }
   }
 
-  String _getHijriDate(BuildContext context) {
+  String _getHijriDate(BuildContext context, [String? apiHijri]) {
+    if (apiHijri != null && apiHijri.trim().isNotEmpty) {
+      final suffix = context.tr('hijri_suffix');
+      return '$apiHijri $suffix';
+    }
     final hijri = HijriCalendar.now();
     final monthKeys = [
       'hijri_muharram', 'hijri_safar', 'hijri_rabi1', 'hijri_rabi2',
@@ -372,6 +417,9 @@ class _FullPrayerTimesScreenState extends ConsumerState<FullPrayerTimesScreen> {
     final isGuest = ref.watch(isGuestProvider);
     final mosquesAsync = ref.watch(mosquesStreamProvider);
     final userCity = ref.watch(userCityProvider).asData?.value;
+    final todayTimes = ref.watch(prayerTimesProvider).asData?.value;
+    // Watch user location for accuracy chip and stale-fix detection
+    final userLocation = ref.watch(userLocationProvider);
 
     ref.listen<AsyncValue<PrayerTimes?>>(prayerTimesProvider, (prev, next) {
       final times = next.asData?.value;
@@ -400,6 +448,29 @@ class _FullPrayerTimesScreenState extends ConsumerState<FullPrayerTimesScreen> {
         ),
         centerTitle: true,
         actions: [
+          // Monthly calendar view
+          IconButton(
+            icon: const Icon(Icons.calendar_month_rounded, color: Colors.white),
+            tooltip: 'التقويم الشهري',
+            onPressed: () => context.push(AppRoutes.prayerCalendar),
+          ),
+          // GPS refresh (visible only in location mode & for GPS users)
+          if (_selectedMode == PrayerMode.location &&
+              (userLocation?.isGps ?? false))
+            IconButton(
+              icon: _isRefreshingGps
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : const Icon(Icons.gps_fixed_rounded, color: Colors.white),
+              tooltip: 'تحديث الموقع GPS',
+              onPressed: _isRefreshingGps ? null : () => _refreshGps(),
+            ),
           IconButton(
             icon: const Icon(Icons.tune_rounded, color: Colors.white),
             tooltip: 'ضبط أوقات الصلاة',
@@ -423,8 +494,8 @@ class _FullPrayerTimesScreenState extends ConsumerState<FullPrayerTimesScreen> {
               children: [
                 Text(
                   userCity != null && userCity.isNotEmpty
-                      ? '${_getHijriDate(context)} | $userCity'
-                      : _getHijriDate(context),
+                      ? '${_getHijriDate(context, todayTimes?.hijriDate)} | $userCity'
+                      : _getHijriDate(context, todayTimes?.hijriDate),
                   style: GoogleFonts.tajawal(
                     fontSize: 16,
                     fontWeight: FontWeight.w800,
@@ -439,6 +510,12 @@ class _FullPrayerTimesScreenState extends ConsumerState<FullPrayerTimesScreen> {
                     color: AppColors.emeraldPale,
                   ),
                 ),
+                // ── GPS accuracy chip (GPS mode only) ─────────────────
+                if (userLocation != null && userLocation.isGps)
+                  _GpsAccuracyChip(
+                    location: userLocation,
+                    onRefresh: () => _refreshGps(),
+                  ),
               ],
             ),
           ),
@@ -529,6 +606,11 @@ class _FullPrayerTimesScreenState extends ConsumerState<FullPrayerTimesScreen> {
               ],
             ),
           ),
+
+          // ── Live Countdown Banner (location mode only) ───────────────
+          // Shows next prayer name + live HH:MM:SS countdown + scheduled time.
+          if (_selectedMode == PrayerMode.location)
+            const PrayerCountdownBanner(),
 
           // ── Mosque Selection Dropdown (Only in Mosque Mode) ──────────
           if (_selectedMode == PrayerMode.mosque)
@@ -1034,6 +1116,88 @@ class _JumuahSection extends StatelessWidget {
             ],
           ),
         ],
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GPS Accuracy Chip
+// Shows the fix quality and a tap-to-refresh button in the date header.
+// ─────────────────────────────────────────────────────────────────────────────
+class _GpsAccuracyChip extends StatelessWidget {
+  const _GpsAccuracyChip({
+    required this.location,
+    required this.onRefresh,
+  });
+
+  final UserLocation location;
+  final VoidCallback onRefresh;
+
+  /// Returns an icon + colour pair that encodes accuracy quality.
+  (IconData, Color) _qualityIcon() {
+    final acc = location.accuracyMeters;
+    if (acc == null) return (Icons.gps_not_fixed_rounded, AppColors.grey300);
+    if (acc <= 50)  return (Icons.gps_fixed_rounded, const Color(0xFF4ADE80));   // green
+    if (acc <= 200) return (Icons.gps_fixed_rounded, AppColors.goldLight);        // amber
+    return (Icons.gps_not_fixed_rounded, const Color(0xFFF87171));               // red
+  }
+
+  /// Whether the stored fix is stale (older than 8 h).
+  bool get _isStale => !location.isFresh;
+
+  @override
+  Widget build(BuildContext context) {
+    final (icon, color) = _qualityIcon();
+    final acc = location.accuracyMeters;
+    final isAr = Localizations.localeOf(context).languageCode == 'ar';
+
+    String label;
+    if (acc == null) {
+      label = isAr ? 'دقة غير معروفة' : 'Unknown accuracy';
+    } else if (acc <= 50) {
+      label = isAr ? '±${acc.round()} م — دقيق جداً' : '±${acc.round()} m — Excellent';
+    } else if (acc <= 200) {
+      label = isAr ? '±${acc.round()} م — جيد' : '±${acc.round()} m — Good';
+    } else {
+      label = isAr ? '±${(acc / 1000).toStringAsFixed(1)} كم — تقريبي' : '±${(acc / 1000).toStringAsFixed(1)} km — Coarse';
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 6),
+      child: GestureDetector(
+        onTap: onRefresh,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 300),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.15),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: color.withValues(alpha: 0.5)),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (_isStale)
+                Padding(
+                  padding: const EdgeInsetsDirectional.only(end: 4),
+                  child: Icon(Icons.refresh_rounded, size: 13, color: color),
+                ),
+              Icon(icon, size: 13, color: color),
+              const SizedBox(width: 5),
+              Text(
+                _isStale
+                    ? (isAr ? 'تحديث الموقع (قديم)' : 'Refresh location (stale)')
+                    : label,
+                style: GoogleFonts.tajawal(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  color: color,
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

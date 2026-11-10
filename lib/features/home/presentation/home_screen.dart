@@ -261,7 +261,23 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                       clipBehavior: Clip.none,
                       child: Row(
                         children: [
-                          // 1. Followed Posts Banner
+                          // 1. WhatsApp Banner
+                          SizedBox(
+                            width: MediaQuery.sizeOf(context).width * 0.8,
+                            child: _WhatsAppChannelBanner(),
+                          ),
+                          
+                          const SizedBox(width: 12),
+                          
+                          // 2. Telegram Banner
+                          SizedBox(
+                            width: MediaQuery.sizeOf(context).width * 0.8,
+                            child: _TelegramChannelBanner(),
+                          ),
+                          
+                          const SizedBox(width: 12),
+                          
+                          // 3. Followed Posts Banner
                           SizedBox(
                             width: MediaQuery.sizeOf(context).width * 0.8,
                             child: GestureDetector(
@@ -331,14 +347,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                                 ),
                               ),
                             ),
-                          ),
-                          
-                          const SizedBox(width: 12),
-                          
-                          // 2. WhatsApp Banner
-                          SizedBox(
-                            width: MediaQuery.sizeOf(context).width * 0.8,
-                            child: _WhatsAppChannelBanner(),
                           ),
                         ],
                       ),
@@ -821,6 +829,25 @@ class _NextPrayerHeroCardState extends State<_NextPrayerHeroCard> {
                     ),
                   ),
                 ],
+                // ── Hijri date strip ──────────────────────────────────────────
+                // Shows the Hijri date from the API response (preferred) so it
+                // stays in sync with the prayer times method used.
+                if (widget.times.hijriDate != null &&
+                    widget.times.hijriDate!.trim().isNotEmpty) ...[
+                  const SizedBox(height: 10),
+                  Center(
+                    child: Text(
+                      '${widget.times.hijriDate} هـ',
+                      style: GoogleFonts.tajawal(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.emeraldPale.withValues(alpha: 0.75),
+                        letterSpacing: 0.3,
+                      ),
+                      textDirection: TextDirection.rtl,
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
@@ -959,6 +986,93 @@ class _WhatsAppChannelBanner extends StatelessWidget {
                 children: [
                   Text(
                     'قناتنا على الواتساب',
+                    style: GoogleFonts.tajawal(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w800,
+                      color: Colors.white,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    'تابعنا للحصول على آخر الأخبار والتحديثات',
+                    style: GoogleFonts.tajawal(
+                      fontSize: 12,
+                      color: Colors.white.withValues(alpha: 0.75),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Icon(
+              Icons.arrow_back_ios_rounded,
+              size: 16,
+              color: AppColors.gold,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Telegram Channel Banner
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _TelegramChannelBanner extends StatelessWidget {
+  static const _channelUrl =
+      'https://t.me/+HFTrU_Fs5QBhZjk0';
+
+  Future<void> _openChannel() async {
+    final uri = Uri.parse(_channelUrl);
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: _openChannel,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            colors: [Color(0xFF229ED9), Color(0xFF2AABEA)],
+            begin: Alignment.topRight,
+            end: Alignment.bottomLeft,
+          ),
+          borderRadius: BorderRadius.circular(18),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFF229ED9).withValues(alpha: 0.4),
+              blurRadius: 12,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Icon(
+                Icons.telegram,
+                color: AppColors.gold,
+                size: 24,
+              ),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'قناتنا على التليجرام',
                     style: GoogleFonts.tajawal(
                       fontSize: 15,
                       fontWeight: FontWeight.w800,
